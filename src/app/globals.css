@@ -1,0 +1,239 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/*
+ * Theme and band variants, for the rare case a component needs more than a token swap.
+ * Prefer tokens: they cascade, so a nested [data-band] scope always wins.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant contrast (&:where([data-theme="contrast"], [data-theme="contrast"] *));
+@custom-variant young (&:where([data-band="elementary"], [data-band="elementary"] *));
+@custom-variant older (&:where([data-band="high"], [data-band="high"] *));
+
+/*
+ * Map tokens (src/styles/tokens.css) to Tailwind utilities. `inline` makes utilities use the
+ * variables directly, so they follow whichever theme and band apply to the element.
+ * Tailwind's own default palette is removed: only semantic colours are available.
+ */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-canvas: var(--canvas);
+  --color-grid: var(--grid);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
+  --color-link: var(--link);
+  --color-focus: var(--focus);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-inverse: var(--inverse);
+  --color-inverse-fg: var(--inverse-fg);
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-text: var(--danger-text);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-fg: var(--info-soft-fg);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-fg: var(--success-soft-fg);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-fg: var(--warning-soft-fg);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-fg: var(--danger-soft-fg);
+  --color-band-elementary: var(--band-elementary);
+  --color-band-elementary-fg: var(--band-elementary-fg);
+  --color-band-middle: var(--band-middle);
+  --color-band-middle-fg: var(--band-middle-fg);
+  --color-band-high: var(--band-high);
+  --color-band-high-fg: var(--band-high-fg);
+  --color-scrim: var(--scrim);
+
+  /* --font-lexend is set on <html> by next/font (app/fonts.ts). */
+  --font-sans: var(--font-lexend), ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type scale: size, line height and (for headings) weight, all per grade band. */
+  --text-caption: var(--fs-caption);
+  --text-caption--line-height: 1.4;
+  --text-small: var(--fs-small);
+  --text-small--line-height: 1.5;
+  --text-body: var(--fs-body);
+  --text-body--line-height: var(--lh-body);
+  --text-control: var(--control-fs);
+  --text-control--line-height: 1.25;
+  --text-lead: var(--fs-lead);
+  --text-lead--line-height: 1.55;
+  --text-heading: var(--fs-heading);
+  --text-heading--line-height: 1.3;
+  --text-heading--font-weight: 800;
+  --text-title: var(--fs-title);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.02em;
+  --text-title--font-weight: var(--weight-heading);
+  --text-display: var(--fs-display);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.025em;
+  --text-display--font-weight: var(--weight-heading);
+
+  /* Named spacing (the 4px numeric scale, p-4 etc., stays available). */
+  --spacing-control: var(--control-h);
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-control-x: var(--control-px);
+  --spacing-check: var(--check-size);
+  --spacing-icon: var(--icon-size);
+  --spacing-card: var(--space-card);
+  --spacing-stack: var(--space-stack);
+  --spacing-gutter: 1.25rem;
+
+  --radius-control: var(--control-radius);
+  --radius-card: var(--card-radius);
+
+  --shadow-sticker: var(--sticker) var(--sticker) 0 0 var(--shadow-color);
+  --shadow-sticker-lg: var(--sticker-lg) var(--sticker-lg) 0 0 var(--shadow-color);
+
+  /* Layering: every stacked surface uses one of these, never a raw number. */
+  --z-index-raised: 10;
+  --z-index-sticky: 100;
+  --z-index-overlay: 400;
+  --z-index-modal: 410;
+  --z-index-popover: 500;
+  --z-index-toast: 600;
+  --z-index-tooltip: 700;
+  --z-index-skip: 800;
+
+  --ease-standard: var(--easing-standard);
+  --ease-enter: var(--easing-enter);
+  --ease-exit: var(--easing-exit);
+  --ease-playful: var(--easing-playful);
+  --default-transition-duration: var(--duration-base);
+  --default-transition-timing-function: var(--easing-standard);
+
+  --animate-fade-in: fade-in var(--duration-base) var(--easing-enter);
+  --animate-fade-out: fade-out var(--duration-fast) var(--easing-exit);
+  --animate-pop-in: pop-in var(--duration-base) var(--easing-playful);
+  --animate-pop-out: pop-out var(--duration-fast) var(--easing-exit);
+  --animate-slide-in-left: slide-in-left var(--duration-slow) var(--easing-enter);
+  --animate-slide-out-left: slide-out-left var(--duration-base) var(--easing-exit);
+  --animate-slide-in-right: slide-in-right var(--duration-slow) var(--easing-enter);
+  --animate-slide-out-right: slide-out-right var(--duration-base) var(--easing-exit);
+  --animate-slide-in-bottom: slide-in-bottom var(--duration-slow) var(--easing-enter);
+  --animate-slide-out-bottom: slide-out-bottom var(--duration-base) var(--easing-exit);
+  --animate-celebrate: celebrate var(--duration-slower) var(--easing-playful);
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  }
+  @keyframes pop-out {
+    to { opacity: 0; transform: scale(0.97); }
+  }
+  @keyframes slide-in-left {
+    from { transform: translateX(-100%); }
+  }
+  @keyframes slide-out-left {
+    to { transform: translateX(-100%); }
+  }
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+  }
+  @keyframes slide-out-right {
+    to { transform: translateX(100%); }
+  }
+  @keyframes slide-in-bottom {
+    from { transform: translateY(100%); }
+  }
+  @keyframes slide-out-bottom {
+    to { transform: translateY(100%); }
+  }
+  @keyframes celebrate {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.12) rotate(-3deg); }
+    70% { transform: scale(0.98) rotate(2deg); }
+    100% { transform: scale(1); }
+  }
+}
+
+/* Duration utilities that follow the motion tokens: duration-fast, duration-base, ... */
+@utility duration-fast {
+  transition-duration: var(--duration-fast);
+}
+@utility duration-base {
+  transition-duration: var(--duration-base);
+}
+@utility duration-slow {
+  transition-duration: var(--duration-slow);
+}
+
+/* Illustrations: large for young learners, hidden for Grades 9–12 (see tokens, bands). */
+@utility illustration {
+  display: var(--illustration-display);
+  width: var(--illustration-size);
+  height: auto;
+  max-width: 100%;
+}
+
+/* The notebook background: graph paper in the theme's grid colour, faded out by band. */
+@utility bg-graph-paper {
+  background-color: var(--canvas);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--grid) var(--grid-strength), transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--grid) var(--grid-strength), transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: var(--focus-width) solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: var(--accent);
+    color: var(--accent-fg);
+  }
+}
+
+/*
+ * Reduced motion: animations and transitions finish instantly. Elements that must keep moving
+ * to make sense (spinners) opt out with data-essential-motion and slow down instead.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *:not([data-essential-motion]),
+  *:not([data-essential-motion])::before,
+  *:not([data-essential-motion])::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

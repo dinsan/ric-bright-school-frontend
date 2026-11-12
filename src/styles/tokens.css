@@ -1,0 +1,331 @@
+/*
+ * Lumina design tokens. Documented in docs/design.md; contrast checked by `npm run tokens:check`.
+ *
+ * Three layers:
+ *   1. Palette   (--palette-*)  raw colours. Never used directly by components.
+ *   2. Themes    semantic colours (--canvas, --fg, --primary, ...) per theme:
+ *                light (default), [data-theme="dark"], [data-theme="contrast"].
+ *   3. Bands     age-appropriate presentation per grade band: type scale, target sizes,
+ *                density, radius, shadow depth. middle (default), [data-band="elementary"],
+ *                [data-band="high"]. Bands can also be set on any element to scope a subtree.
+ * Plus fixed scales: z-index and motion.
+ *
+ * Colour tokens must be plain hex (no alpha) so the contrast script can check them.
+ * globals.css maps these variables to Tailwind utilities (bg-canvas, text-fg, text-body, ...).
+ */
+
+/* 1. Palette ---------------------------------------------------------------------------- */
+:root {
+  --palette-white: #ffffff;
+  --palette-black: #000000;
+
+  --palette-ink-950: #0a1230;
+  --palette-ink-900: #0e1a3b;
+  --palette-ink-600: #4a5679;
+  --palette-ink-200: #d5ddef;
+  --palette-ink-100: #e1e9f8;
+  --palette-ink-75: #eaf0fb;
+  --palette-ink-50: #f5f8ff;
+
+  --palette-cobalt-700: #1a2fa8;
+  --palette-cobalt-600: #1d3ad6;
+  --palette-cobalt-500: #2547f5;
+  --palette-cobalt-100: #e6ecff;
+
+  --palette-marker-400: #ffd23f;
+
+  --palette-folder-700: #0f6a47;
+  --palette-folder-600: #137a52;
+  --palette-folder-100: #e3f6ee;
+
+  --palette-red-700: #a3222a;
+  --palette-red-500: #c8323a;
+  --palette-red-100: #fde8e9;
+
+  --palette-amber-700: #7a4a00;
+  --palette-amber-500: #e39b12;
+  --palette-amber-100: #fff3d1;
+
+  --palette-night-900: #0b1229;
+  --palette-night-850: #121c3a;
+  --palette-night-800: #1a2750;
+  --palette-night-700: #2a375f;
+}
+
+/* 2. Themes: light (default) ------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+
+  --canvas: var(--palette-ink-50);
+  --grid: var(--palette-ink-100);
+  --surface: var(--palette-white);
+  --surface-sunken: var(--palette-ink-75);
+  --fg: var(--palette-ink-900);
+  --fg-muted: var(--palette-ink-600);
+  --line: var(--palette-ink-900);
+  --line-subtle: var(--palette-ink-200);
+  --link: var(--palette-cobalt-600);
+  --focus: var(--palette-cobalt-500);
+  --shadow-color: var(--palette-ink-900);
+
+  --primary: var(--palette-cobalt-500);
+  --primary-hover: var(--palette-cobalt-600);
+  --primary-fg: var(--palette-white);
+  --accent: var(--palette-marker-400);
+  --accent-fg: var(--palette-ink-900);
+  --inverse: var(--palette-ink-900);
+  --inverse-fg: var(--palette-ink-50);
+
+  --success: var(--palette-folder-600);
+  --success-fg: var(--palette-white);
+  --warning: var(--palette-amber-500);
+  --warning-fg: var(--palette-ink-900);
+  --danger: var(--palette-red-500);
+  --danger-hover: var(--palette-red-700);
+  --danger-fg: var(--palette-white);
+  --danger-text: var(--palette-red-700);
+
+  --info-soft: var(--palette-cobalt-100);
+  --info-soft-fg: var(--palette-cobalt-700);
+  --success-soft: var(--palette-folder-100);
+  --success-soft-fg: var(--palette-folder-700);
+  --warning-soft: var(--palette-amber-100);
+  --warning-soft-fg: var(--palette-amber-700);
+  --danger-soft: var(--palette-red-100);
+  --danger-soft-fg: var(--palette-red-700);
+
+  /* Grade band colours: identical in every theme, so a grade looks the same everywhere. */
+  --band-elementary: var(--palette-marker-400);
+  --band-elementary-fg: var(--palette-ink-900);
+  --band-middle: var(--palette-folder-600);
+  --band-middle-fg: var(--palette-white);
+  --band-high: var(--palette-cobalt-500);
+  --band-high-fg: var(--palette-white);
+
+  /* Scrim behind dialogs and sheets (decorative, so alpha is fine). */
+  --scrim: rgb(14 26 59 / 0.55);
+}
+
+/* Dark: deep navy paper, light ink. Brighter accents keep their meaning. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: var(--palette-night-900);
+  --grid: #16203f;
+  --surface: var(--palette-night-850);
+  --surface-sunken: var(--palette-night-800);
+  --fg: #eef2ff;
+  --fg-muted: #aab6d8;
+  --line: #8d9bc7;
+  --line-subtle: var(--palette-night-700);
+  --link: #9db0ff;
+  --focus: var(--palette-marker-400);
+  --shadow-color: #02040c;
+
+  --primary: #7b93ff;
+  --primary-hover: #97aaff;
+  --primary-fg: var(--palette-night-900);
+  --accent: var(--palette-marker-400);
+  --accent-fg: var(--palette-ink-900);
+  --inverse: #eef2ff;
+  --inverse-fg: var(--palette-night-900);
+
+  --success: #4cc794;
+  --success-fg: #052a1b;
+  --warning: #ffc15e;
+  --warning-fg: #2b1a00;
+  --danger: #ff7a80;
+  --danger-hover: #ff9aa0;
+  --danger-fg: #2b0407;
+  --danger-text: #ff9aa0;
+
+  --info-soft: #1a2a66;
+  --info-soft-fg: #c4d0ff;
+  --success-soft: #0f3326;
+  --success-soft-fg: #9be8c4;
+  --warning-soft: #3a2a08;
+  --warning-soft-fg: #ffd98f;
+  --danger-soft: #3d1318;
+  --danger-soft-fg: #ffb3b7;
+
+  --scrim: rgb(2 4 12 / 0.7);
+}
+
+/* High contrast: black on white, no decoration, AAA text contrast (7:1). */
+[data-theme="contrast"] {
+  color-scheme: light;
+
+  --canvas: var(--palette-white);
+  --grid: var(--palette-white);
+  --surface: var(--palette-white);
+  --surface-sunken: #ebebeb;
+  --fg: var(--palette-black);
+  --fg-muted: #262626;
+  --line: var(--palette-black);
+  --line-subtle: var(--palette-black);
+  --link: #0019a8;
+  --focus: var(--palette-black);
+  --shadow-color: var(--palette-black);
+
+  --primary: #0019a8;
+  --primary-hover: #001080;
+  --primary-fg: var(--palette-white);
+  --accent: var(--palette-marker-400);
+  --accent-fg: var(--palette-black);
+  --inverse: var(--palette-black);
+  --inverse-fg: var(--palette-white);
+
+  --success: #00552f;
+  --success-fg: var(--palette-white);
+  --warning: var(--palette-marker-400);
+  --warning-fg: var(--palette-black);
+  --danger: #9e0010;
+  --danger-hover: #750009;
+  --danger-fg: var(--palette-white);
+  --danger-text: #9e0010;
+
+  --info-soft: #e6ecff;
+  --info-soft-fg: #00137f;
+  --success-soft: #dff5e9;
+  --success-soft-fg: #003d21;
+  --warning-soft: #fff1c2;
+  --warning-soft-fg: #4a2e00;
+  --danger-soft: #ffe3e5;
+  --danger-soft-fg: #7a000c;
+
+  --band-elementary-fg: var(--palette-black);
+  --band-middle: #00552f;
+  --band-high: #0019a8;
+
+  --scrim: rgb(0 0 0 / 0.75);
+}
+
+/* 3. Grade bands ------------------------------------------------------------------------ */
+/*
+ * middle (Grades 6–8) is the default and what the public site uses.
+ * elementary (Grades 1–5): larger type and targets, rounder, bouncier, illustrations shown big.
+ * high (Grades 9–12): denser and calmer: smaller headings, lighter weight, flatter shadows,
+ * no background grid, no illustrations.
+ * Inputs never go below 1rem (16px): smaller text makes iOS zoom in on focus.
+ */
+:root,
+[data-band="middle"] {
+  --fs-caption: 0.8125rem;
+  --fs-small: 0.875rem;
+  --fs-body: 1rem;
+  --fs-lead: 1.25rem;
+  --fs-heading: 1.375rem;
+  --fs-title: clamp(2rem, 1.5rem + 2vw, 3rem);
+  --fs-display: clamp(2.5rem, 1.6rem + 4vw, 4rem);
+  --lh-body: 1.6;
+  --weight-heading: 900;
+
+  --control-h: 2.75rem; /* 44px: WCAG 2.5.5 target size */
+  --control-h-sm: 2.25rem;
+  --control-h-lg: 3.25rem;
+  --control-px: 1rem;
+  --control-fs: 1rem;
+  --check-size: 1.5rem;
+  --icon-size: 1.25rem;
+
+  --space-card: 1.25rem;
+  --space-stack: 1.25rem;
+
+  --control-radius: 0.5rem;
+  --card-radius: 0.75rem;
+
+  --sticker: 3px;
+  --sticker-lg: 6px;
+  --grid-strength: 100%;
+
+  --illustration-size: 8rem;
+  --illustration-display: block;
+  --easing-playful: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-band="elementary"] {
+  --fs-caption: 0.9375rem;
+  --fs-small: 1rem;
+  --fs-body: 1.125rem;
+  --fs-lead: 1.375rem;
+  --fs-heading: 1.625rem;
+  --fs-title: clamp(2.25rem, 1.75rem + 2.2vw, 3.25rem);
+  --fs-display: clamp(2.75rem, 1.9rem + 4.4vw, 4.5rem);
+  --lh-body: 1.65;
+  --weight-heading: 900;
+
+  --control-h: 3.5rem; /* 56px: big, forgiving targets for small hands */
+  --control-h-sm: 2.75rem;
+  --control-h-lg: 4rem;
+  --control-px: 1.25rem;
+  --control-fs: 1.125rem;
+  --check-size: 1.75rem;
+  --icon-size: 1.5rem;
+
+  --space-card: 1.5rem;
+  --space-stack: 1.5rem;
+
+  --control-radius: 0.875rem;
+  --card-radius: 1.25rem;
+
+  --sticker: 4px;
+  --sticker-lg: 7px;
+  --grid-strength: 100%;
+
+  --illustration-size: 12rem;
+  --illustration-display: block;
+  --easing-playful: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-band="high"] {
+  --fs-caption: 0.8125rem;
+  --fs-small: 0.875rem;
+  --fs-body: 1rem;
+  --fs-lead: 1.125rem;
+  --fs-heading: 1.25rem;
+  --fs-title: clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem);
+  --fs-display: clamp(2.25rem, 1.5rem + 3.4vw, 3.5rem);
+  --lh-body: 1.55;
+  --weight-heading: 800;
+
+  --control-h: 2.5rem; /* 40px: still well above the 24px WCAG 2.5.8 minimum */
+  --control-h-sm: 2rem;
+  --control-h-lg: 3rem;
+  --control-px: 0.875rem;
+  --control-fs: 1rem;
+  --check-size: 1.25rem;
+  --icon-size: 1.125rem;
+
+  --space-card: 1rem;
+  --space-stack: 1rem;
+
+  --control-radius: 0.375rem;
+  --card-radius: 0.5rem;
+
+  --sticker: 2px;
+  --sticker-lg: 4px;
+  --grid-strength: 0%;
+
+  --illustration-size: 0;
+  --illustration-display: none;
+  --easing-playful: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Fixed scales ------------------------------------------------------------------------- */
+:root {
+  /* Motion. Durations stay short; everything collapses under prefers-reduced-motion. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --duration-slower: 600ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-enter: cubic-bezier(0, 0, 0.2, 1);
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --focus-width: 3px;
+}
+
+[data-theme="contrast"] {
+  --focus-width: 4px;
+  --grid-strength: 0%;
+}

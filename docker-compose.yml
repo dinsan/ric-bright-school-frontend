@@ -1,0 +1,26 @@
+# Runs the Lumina web app in Docker: docker compose up --build
+#
+# The API is not part of this repository. Start it first (by default the app expects it on
+# your machine at http://localhost:8000), or point the two variables below somewhere else:
+#   NEXT_PUBLIC_API_URL=https://api.example.com API_URL=https://api.example.com docker compose up --build
+services:
+  web:
+    build:
+      context: .
+      args:
+        # Baked into the browser bundle at build time, so it must be reachable from your browser.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      # Used for server-side rendering inside the container. "localhost" would be the container
+      # itself, so the default reaches the API running on your machine through the Docker host.
+      API_URL: ${API_URL:-http://host.docker.internal:8000}
+      # Account requests (sign-in, settings) also go from this container to API_URL.
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      # The address people open the app on: used for redirects and the social sign-in callback.
+      APP_URL: ${APP_URL:-http://localhost:3000}
+    extra_hosts:
+      # Built into Docker Desktop (macOS, Windows); this line makes the name work on Linux too.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    restart: unless-stopped
