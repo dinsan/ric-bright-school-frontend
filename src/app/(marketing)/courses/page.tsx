@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CourseGridSkeleton } from "@/features/catalog/components/course-grid";
 import { CoursesBrowser } from "@/features/catalog/components/courses-browser";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Courses",
-  description: "Browse courses for Grades 1 to 12 by grade, subject or title.",
-};
+// Filtered views (?grade=, ?subject=, ?q=) are the same page: the canonical URL is /courses.
+export const metadata: Metadata = pageMetadata({
+  title: "Courses for Grades 1 to 12",
+  description: "Browse Lumina's courses for Grades 1 to 12 by grade, subject or title: mathematics, reading and writing, science, history and more.",
+  path: "/courses",
+});
 
 export default function CoursesPage() {
   return (

@@ -28,8 +28,7 @@ export function ChildSwitcher({ activeChildId }: { activeChildId: string | null 
         <Button variant="ghost" className="max-w-48 gap-2 px-2" loading={setActive.isPending}>
           <Avatar name={active.display_name} size="sm" decorative />
           <span className="truncate max-sm:sr-only">
-            <span className="sr-only">Showing </span>
-            {active.display_name.split(" ")[0]}
+            <span className="sr-only">Showing</span> {active.display_name.split(" ")[0]}
           </span>
           <ChevronDown aria-hidden />
         </Button>

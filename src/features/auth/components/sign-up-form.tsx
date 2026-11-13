@@ -14,23 +14,25 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Radio, RadioGroup } from "@/components/ui/radio-group";
 import { fields } from "@/lib/forms/zod";
 import { authApi } from "../api";
+import { PASSWORD_MAX, PASSWORD_MIN } from "../contract";
+import { PolicyLink } from "./policy-link";
 import { SocialSignIn } from "./social-sign-in";
 
-export const PASSWORD_MIN = 8;
+export { PASSWORD_MIN };
 
 const schema = z.object({
   role: fields.choice(["parent", "teacher"] as const, "who you are"),
   display_name: fields.text("your name", { max: 80 }),
   email: fields.email(),
-  password: fields.text("a password", { min: PASSWORD_MIN, max: 128 }),
+  password: fields.text("a password", { min: PASSWORD_MIN, max: PASSWORD_MAX }),
   accept_terms: fields.accept("agree to the terms and privacy policy"),
 });
 
 /** Sign-up for parents and teachers. Students get their accounts from a parent or teacher. */
-export function SignUpForm() {
+export function SignUpForm({ initialRole }: { initialRole?: "parent" | "teacher" }) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const form = useZodForm(schema, {
-    defaultValues: { role: undefined, display_name: "", email: "", password: "", accept_terms: false },
+    defaultValues: { role: initialRole, display_name: "", email: "", password: "", accept_terms: false },
   });
 
   if (sentTo) return <CheckYourEmail email={sentTo} />;
@@ -58,12 +60,19 @@ export function SignUpForm() {
         <FormField name="password" label="Password" hint={`At least ${PASSWORD_MIN} characters. A short sentence is easy to remember.`} required>
           <PasswordInput autoComplete="new-password" {...form.register("password")} />
         </FormField>
-        <Checkbox label="I agree to Lumina's terms of use and privacy policy" {...form.register("accept_terms")} />
+        <Checkbox
+          label={
+            <>
+              I agree to Lumina&apos;s <PolicyLink href="/terms">terms of use</PolicyLink> and <PolicyLink href="/privacy">privacy policy</PolicyLink>
+            </>
+          }
+          {...form.register("accept_terms")}
+        />
         <div>
           <SubmitButton>Create account</SubmitButton>
         </div>
       </Form>
-      <SocialSignIn label="Sign up with" />
+      <SocialSignIn label="Sign up with" intent="signup" role={form.watch("role") ?? null} />
     </div>
   );
 }

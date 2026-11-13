@@ -1,26 +1,73 @@
-# Runs the Lumina web app in Docker: docker compose up --build
+# Lumina with its database: docker compose up --build   (or: make up)
 #
-# The API is not part of this repository. Start it first (by default the app expects it on
-# your machine at http://localhost:8000), or point the two variables below somewhere else:
-#   NEXT_PUBLIC_API_URL=https://api.example.com API_URL=https://api.example.com docker compose up --build
+# Needs AUTH_SECRET (it encrypts two-step verification secrets, so keep it stable). Put it in a .env
+# file next to this one, which Compose reads automatically:
+#   echo "AUTH_SECRET=$(openssl rand -base64 48)" > .env
+#
+# Services: db (PostgreSQL 16) -> migrate (applies migrations, then exits) -> web (the app on :3000).
+# Sample data and demo accounts: docker compose run --rm migrate npm run db:seed
+# Only the database, for `npm run dev` on your machine: docker compose up -d db
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lumina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumina}
+      POSTGRES_DB: lumina
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Published for local development (npm run dev). Remove in production.
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumina -d lumina"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgres://lumina:${POSTGRES_PASSWORD:-lumina}@db:5432/lumina
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   web:
     build:
       context: .
       args:
-        # Baked into the browser bundle at build time, so it must be reachable from your browser.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        # The public address, baked into canonical URLs, the sitemap and share images. Localhost builds are noindex.
+        SITE_URL: ${SITE_URL:-${APP_URL:-http://localhost:3000}}
+        SITE_NOINDEX: ${SITE_NOINDEX:-}
     environment:
-      # Used for server-side rendering inside the container. "localhost" would be the container
-      # itself, so the default reaches the API running on your machine through the Docker host.
-      API_URL: ${API_URL:-http://host.docker.internal:8000}
-      # Account requests (sign-in, settings) also go from this container to API_URL.
-      API_PREFIX: ${API_PREFIX:-/api/v1}
-      # The address people open the app on: used for redirects and the social sign-in callback.
+      DATABASE_URL: postgres://lumina:${POSTGRES_PASSWORD:-lumina}@db:5432/lumina
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET, for example in .env - see the top of docker-compose.yml}
+      # The address people open the app on: used in emails, redirects and the social sign-in callback.
       APP_URL: ${APP_URL:-http://localhost:3000}
-    extra_hosts:
-      # Built into Docker Desktop (macOS, Windows); this line makes the name work on Linux too.
-      - "host.docker.internal:host-gateway"
+      # Without SMTP_URL, emails (sign-up links, password resets) are printed to the log: docker compose logs web
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-Lumina <no-reply@lumina.local>}
+      # Plain HTTP on localhost: cookies can't be Secure. Remove behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "${WEB_PORT:-3000}:3000"
     restart: unless-stopped
+
+volumes:
+  pgdata:

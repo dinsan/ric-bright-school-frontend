@@ -7,8 +7,15 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  // Relative URLs in metadata (canonical, Open Graph) resolve against the public address (SITE_URL).
+  metadataBase: new URL(siteConfig.url),
   title: { default: `${siteConfig.name}: learn every grade`, template: `%s · ${siteConfig.name}` },
-  description: siteConfig.description,
+  description: siteConfig.longDescription,
+  applicationName: siteConfig.name,
+  openGraph: { type: "website", siteName: siteConfig.name, locale: "en_GB" },
+  twitter: { card: "summary_large_image" },
+  // Previews, staging and localhost builds stay out of search engines (see next.config.ts).
+  ...(siteConfig.indexable ? {} : { robots: { index: false, follow: false } }),
 };
 
 export const viewport: Viewport = {

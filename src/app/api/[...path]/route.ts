@@ -1,18 +1,10 @@
-import type { NextRequest } from "next/server";
-import { proxyToBackend } from "@/lib/server/bff";
+import { errorEnvelope } from "@/server/http/route";
 
-// Same-origin gateway to the backend API: /api/me -> <API_URL><API_PREFIX>/me, with the session
-// from httpOnly cookies. See src/lib/server/bff.ts and docs/auth.md.
+// Any /api path without a handler: a JSON 404 in the usual error envelope (not the HTML not-found page).
+const notFound = () => errorEnvelope(404, "not_found", "There is no API endpoint at this address.");
 
-type Context = { params: Promise<{ path: string[] }> };
-
-async function handle(request: NextRequest, { params }: Context) {
-  const { path } = await params;
-  return proxyToBackend(request, `/${path.map(encodeURIComponent).join("/")}`);
-}
-
-export const GET = handle;
-export const POST = handle;
-export const PUT = handle;
-export const PATCH = handle;
-export const DELETE = handle;
+export const GET = notFound;
+export const POST = notFound;
+export const PUT = notFound;
+export const PATCH = notFound;
+export const DELETE = notFound;

@@ -1,148 +1,139 @@
 # Accounts and sign-in
 
-How the web app connects to the backend's accounts API: sessions, sign-in for every role, account
-settings, families and admin tools.
+How Lumina handles sessions, sign-in for every role, account settings, families and admin tools. Everything
+here runs in this app: Route Handlers in `src/app/api`, services in `src/server`, data in PostgreSQL. The
+general architecture is in [`backend.md`](backend.md).
 
-> **Status: built against an assumed contract.** The backend's endpoint list was available, but not the
-> request and response shapes, and the classroom sign-in endpoints were not in the list. Everything
-> assumed is in one file, `src/features/auth/contract.ts`, marked `ASSUMED`, and in the checklist
-> below. Confirm it against the backend's `/openapi.json` before release (TODO: FE-AUTH-11).
+## Decision: how the browser holds the session (X-02)
 
-## Decision: how the browser holds the session (closes X-02)
+**Context.** Lumina is used by children (FE-SEC-03: no tokens readable by JavaScript). Sessions must be
+revocable: "sign out everywhere else", a password change, an admin turning an account off, and the list of
+signed-in devices all need the server to end a session immediately.
 
-**Context.** The backend issues an access token and a refresh token (`/auth/login`, `/auth/refresh`,
-`/auth/oauth/exchange` …). Tokens readable by JavaScript can be stolen by any script injection, and this
-app is used by children (FE-SEC-03: no tokens in `localStorage`).
+**Decision.** Server-side sessions in PostgreSQL, referenced by an httpOnly cookie.
 
-**Decision.** A backend-for-frontend (BFF) inside this Next.js app:
+- Signing in creates a row in `sessions` and gives the browser a random 256-bit token in the `lumina_sid`
+  cookie (httpOnly, SameSite=Lax, Secure on HTTPS). The database stores only the token's **SHA-256**, so a
+  leaked database or backup doesn't hand out sessions.
+- Every API request and every signed-in page looks the token up (one indexed query; once per request for
+  pages, thanks to React `cache`). The session row knows the user, the device, the IP and when it expires.
+- **Sliding expiry**: standard sessions last 30 days and are extended to 30 days again when used in their
+  second half. Server Components can't set cookies, so the proxy (`src/proxy.ts`) renews the cookie's
+  lifetime on page loads; the database row remains the authority.
+- **Kinds**: `standard`; `classroom` (picture sign-in on a shared device: one school day, not extended);
+  `impersonation` (an admin viewing as someone: one hour, not extended, marked with the admin's id).
+- **Ending sessions** deletes rows: sign out, "sign out everywhere else", a password change or reset (all
+  other sessions), an admin turning an account off or changing its role (all sessions), deleting the account.
+- **CSRF**: cookies are SameSite=Lax, and every state-changing API request must carry
+  `X-Requested-With: lumina` and an `Origin` (or `Referer`) matching this site (`src/server/http/request.ts`).
+  A cross-site form can't add the header; a cross-site `fetch` can't without a CORS preflight, which this
+  app never approves. Forms use `method="post"`, so a submit before JavaScript loads never puts passwords in a URL.
+- **Outages are not sign-outs**: when PostgreSQL is unreachable the API answers 503 and pages show
+  "Try again"; cookies are kept.
 
-- The browser only talks to this site. `/api/<path>` is a gateway to `<API_URL><API_PREFIX>/<path>`
-  (`src/app/api/[...path]/route.ts`, `src/lib/server/bff.ts`).
-- When **any** backend response contains `access_token` + `refresh_token`, the gateway stores them in
-  **httpOnly, SameSite=Lax** cookies (`Secure` on HTTPS) and removes them from the body. The browser gets
-  `{ signed_in: true, user }` instead. The MFA step token is kept the same way.
-- The gateway adds `Authorization: Bearer …` to every backend call, refreshes once when the access token
-  is missing or rejected, and never lets the browser call `/auth/refresh`.
-- Server Components read the access token from the cookie (`getCurrentUser`, `requireUser`).
-  `src/proxy.ts` refreshes an expired token before pages render (Server Components can't set cookies).
-- CSRF: cookies are SameSite=Lax, and every state-changing gateway request must carry
-  `X-Requested-With: lumina` and an `Origin` matching this site (`isSameSite`). Forms use `method="post"`,
-  so a submit before JavaScript loads never puts passwords in a URL.
-
-**Consequences.** Tokens never reach browser JavaScript; the public catalog still calls the API
-directly. Every authenticated request makes one extra hop through the Next.js server. Sessions survive
-backend outages: only a *rejected* refresh signs someone out, an *unavailable* backend shows "Try again".
+**Consequences.** No tokens ever reach browser JavaScript or response bodies; revocation is immediate; one
+database lookup per request (indexed, cheap). Replaces the earlier design in which a separate backend issued
+access and refresh tokens that this app relayed.
 
 | Cookie | httpOnly | What |
 | --- | --- | --- |
-| `lumina_at` | yes | Access token. Expires ~30 s before the token, so it is refreshed in time |
-| `lumina_rt` | yes | Refresh token |
-| `lumina_mfa` | yes | MFA step token, 10 minutes |
-| `lumina_imp` | yes | The admin's own refresh token while viewing as someone else |
+| `lumina_sid` | yes | The session token (30 days, renewed while used) |
+| `lumina_mfa` | yes | The two-step verification step between the password and the code, 10 minutes |
+| `lumina_imp` | yes | The admin's own session token while viewing as someone else, 1 hour |
+| `lumina_oauth` | yes | OAuth state binding the provider's answer to this browser, 10 minutes |
 | `lumina_session` | **no** | The role (`parent`, …). Only for instant UI (header, redirects); never trusted for access |
-
-## Configuration
-
-| Variable | Default | What |
-| --- | --- | --- |
-| `API_URL` | `NEXT_PUBLIC_API_URL` | Where the server reaches the backend (also for the gateway) |
-| `API_PREFIX` | `/api/v1` | Prefix of the accounts endpoints on the backend |
-| `APP_URL` | from the `Host` header | This site's public URL, for redirects and the OAuth callback. **Set it in production** (behind a proxy the Host header may be internal; the standalone server otherwise reports `0.0.0.0`) |
-| `COOKIE_SECURE` | by protocol | Force `Secure` cookies on (`true`) or off (`false`) |
-
-The backend must send OAuth users back to `<APP_URL>/auth/callback` (the gateway passes it as
-`redirect_uri`) and, if it restricts origins, allow this site's server to call it. Browsers no longer call
-the accounts API directly, so no CORS is needed for it.
 
 ## Where things are
 
 | | |
 | --- | --- |
-| `src/features/auth/contract.ts` | Paths, types, assumed shapes, `roleHome` |
-| `src/lib/server/session.ts` | Cookies, refresh, `getCurrentUser`, `requireUser`, `publicOrigin` |
-| `src/lib/server/bff.ts` | The gateway: forwarding, token capture, refresh, CSRF |
-| `src/proxy.ts` | Page guard: refresh, signed-out redirects (with `next`), signed-in visitors away from sign-in |
-| `src/app/auth/callback`, `src/app/auth/resume` | OAuth return; recovering a page whose token the backend refused |
-| `src/app/api/session`, `…/auth/logout`, `…/impersonation`, `…/admin/users/[id]/impersonate` | Gateway routes owned by this app |
-| `src/app/(auth)/…` | Sign-in (email, student username, class code + pictures), sign-up, verify email, forgot/reset password, confirm email change |
-| `src/app/(app)/…` | Signed-in areas: `/learn` (students), `/teach`, `/family`, `/admin`, `/account` for everyone |
-| `src/features/{auth,account,family,admin}` | API clients, hooks and screens per area |
+| `src/features/auth/contract.ts` | Shared JSON types and paths (browser and server), `roleHome`, shared rules (password length, usernames, pictures) |
+| `src/server/auth/session.ts`, `cookies.ts` | Sessions in the database; cookie names, lifetimes and writers |
+| `src/server/auth/context.ts` | `requireAuth(request, roles)` for Route Handlers |
+| `src/server/auth/current-user.ts` | `getCurrentUser`, `requireUser(roles)`, `isImpersonating` for Server Components |
+| `src/server/auth/service.ts` | Sign-up, email verification, every sign-in method, password reset, email change confirmation |
+| `src/server/auth/sign-in.ts` | After credentials: session or MFA step; lockouts |
+| `src/server/auth/mfa.ts`, `totp.ts`, `tokens.ts`, `password.ts`, `crypto.ts` | Primitives (see Security below) |
+| `src/server/oauth/` | Google / Microsoft / Apple |
+| `src/server/accounts/`, `family/`, `admin/` | Account settings, children, administration |
+| `src/proxy.ts` | Page guard: signed-out redirects (with `next`), signed-in visitors away from sign-in, cookie renewal |
+| `src/app/auth/callback`, `src/app/auth/resume` | OAuth return; clearing a session that ended while a page was open |
+| `src/app/(auth)/…`, `src/app/(app)/…` | Sign-in pages; signed-in areas (`/learn`, `/teach`, `/family`, `/admin`, `/account`) |
 
 ## Flows
 
 - **Sign in** (`/sign-in`): email + password for parents, teachers, admins; MFA step (authenticator or
-  recovery code) when required; Google / Microsoft / Apple for the providers `/auth/oauth/providers` lists;
-  "Confirm your email first" with resend. After sign-in: the page asked for (`?next=`, same-site paths
-  only) or the role's home. Students get the reading level of their grade.
+  recovery code) when switched on; Google / Microsoft / Apple for configured providers; "Confirm your email
+  first" with resend. After sign-in: the page asked for (`?next=`, same-site paths only) or the role's home.
+  Students get the reading level of their grade.
 - **Students**: `/sign-in/student` (username + password) or `/sign-in/class`: class code → "Who are you?"
   → tap 3 pictures (submits after the third; progress shown as dots, never the pictures; lock message
   after too many tries). A classroom device can remember the class code. Always in the Grades 1–5 look.
-- **Sign up** (`/sign-up`): parent or teacher, then "check your email"; `/verify-email?token=` confirms
-  (and signs in if the backend returns tokens).
+- **Sign up** (`/sign-up`): parent or teacher, then "check your email"; `/verify-email?token=` confirms and
+  signs in (unless the account already uses two-step verification). With Google / Microsoft / Apple, the role
+  chosen in the form is used and the provider must confirm the email address.
 - **Passwords**: `/forgot-password` always gives the same answer (no account enumeration);
-  `/reset-password?token=`.
-- **Account** (`/account`, `/account/security`): profile, language, time zone, teacher profile,
-  display settings, parent link code (students), password, email change (`/confirm-email?token=`),
-  two-step verification (QR drawn locally, recovery codes shown once, regenerate, turn off), linked
-  Google / Microsoft / Apple accounts, sessions (sign out one / all others), delete account.
-- **Families** (`/family`, `/family/children`): add a child (parental consent), choose how the child
-  signs in (username + password, or username + 3 pictures), link a student account with the code the
+  `/reset-password?token=` sets a new password, signs out every device and confirms the email.
+- **Account** (`/account`, `/account/security`): profile, language, time zone, teacher profile, display
+  settings, parent link code (students), password, email change (`/confirm-email?token=`), two-step
+  verification (QR drawn locally, recovery codes shown once, regenerate, turn off), linked Google / Microsoft
+  / Apple accounts, sessions (sign out one / all others), delete account (not for students).
+- **Families** (`/family`, `/family/children`): add a child (parental consent, recorded), choose how the
+  child signs in (username + password, or username + 3 pictures), link a student account with the code the
   student makes, switch the active child from the top bar.
 - **Admin** (`/admin/users`): search (URL state), role changes, turn accounts off/on, verify teachers,
   reset MFA, view as a user (banner, "Stop viewing" restores the admin session; admins can't view as
-  admins or act on themselves).
-- **Session ends** (signed out elsewhere, refresh rejected): pages go through `/auth/resume`, which
-  refreshes or clears cookies and sends the person to sign-in and back; client requests that get 401
-  check `/api/session` first, then do the same.
+  admins or act on themselves). Every action is written to `audit_events`.
+- **Session ends** (signed out elsewhere, expired, turned off): pages go through `/auth/resume`, which
+  clears the cookies and sends the person to sign-in and back; client requests that get 401 check
+  `/api/session` first, then do the same.
 
-## Contract checklist (confirm with the backend)
+## Rules the server enforces
 
-Everything here is assumed; the code to change is in `src/features/auth/contract.ts` unless noted.
+1. **No account enumeration.** Sign-up answers 202 whether or not the email is taken (an existing account's
+   owner gets a "you already have an account" email instead); resend and forgot-password always answer 202.
+   Sign-in answers the same 401 for unknown emails and wrong passwords, with the same timing (a dummy
+   argon2 check), and only says "confirm your email" (403 `email_not_verified`) or "turned off"
+   (403 `account_disabled`) after a correct password.
+2. **Lockouts.** 10 wrong passwords in a row lock the account for 15 minutes (429 `too_many_attempts`);
+   5 wrong picture sets lock picture sign-in (423 `account_locked`, "ask your teacher"); 5 wrong codes end
+   the MFA step. Per-IP rate limits on top (sign-in, class codes, emails, link codes).
+3. **One-time links** (email verification 48 h, password reset 1 h, email change 24 h, parent link code
+   7 days) are stored hashed and consumed atomically: a link works once, even under concurrent requests.
+   Only the newest link of each kind works.
+4. **Two-step verification.** TOTP (RFC 6238, ±1 step drift); a code's time step is recorded, so the same
+   code can't be used twice. Secrets are encrypted at rest (AES-256-GCM, key derived from `AUTH_SECRET`).
+   10 recovery codes, stored hashed, each works once. Adults only.
+5. **Sensitive changes need the password**: password change (`body.current_password`), email change and
+   account deletion (`body.password`); limited to 10 tries per 15 minutes.
+6. **While an admin views as someone**, credentials can't be changed (password, email, two-step
+   verification, linked accounts, account deletion): 403 `impersonation_restricted`.
+7. **OAuth** never links to an existing account just because the email matches (that would let whoever
+   controls the provider account take the Lumina account). Linking is done from Sign-in and security while
+   signed in. Sign-in with an unlinked identity goes to `/sign-in?error=oauth_no_account`; sign-up with an
+   email that already has an account to `?error=oauth_email_taken`.
+8. **Field errors** come as `details[].field` = `body.<field>` (e.g. `body.email`, `body.current_password`,
+   `body.username`, `body.code`), and the forms show them next to the field.
 
-1. **Prefix**: accounts endpoints live under `/api/v1` like the catalog (`API_PREFIX`).
-2. **Tokens**: `{access_token, refresh_token, token_type, expires_in?, refresh_expires_in?}`; JWTs
-   are fine (their `exp` is used when `expires_in` is missing). `/auth/refresh` takes
-   `{refresh_token}` and rotates both tokens. `/auth/logout` takes `{refresh_token}` with the bearer token.
-3. **MFA**: `/auth/login` answers `{mfa_required: true, mfa_token}`; `/auth/login/mfa` takes
-   `{mfa_token, code}` where `code` is a TOTP or a recovery code.
-4. **Errors** use the usual envelope; codes the UI reacts to: `email_not_verified` (403 on login),
-   401 for wrong credentials, 423/429 for a locked picture sign-in, 404 for an unknown class code,
-   `details[].field` for field errors (e.g. `body.email` on register, `body.current_password`).
-5. **`GET /me`**: `id, role, display_name, email, username, email_verified, mfa_enabled, avatar_url,
-   grade_level, language, timezone, teacher_profile{school_name, subjects[], grade_levels[], bio,
-   verified}, active_child_id`. `PATCH /me` takes `display_name, language, timezone`.
-   `DELETE /me` takes `{password?}`.
-6. **Register** `{role: parent|teacher, display_name, email, password, accept_terms: true}`; verify
-   `{token}` (may return tokens: then the person is signed in); resend `{email}`; forgot `{email}`;
-   reset `{token, password}`; email change `{new_email, password}` then confirm `{token}`;
-   password change `{current_password, new_password}`.
-7. **OAuth**: start is a browser navigation to `/auth/oauth/{provider}/start?redirect_uri=…` (a 302, or
-   JSON `{authorization_url}`); the backend returns to `redirect_uri?code=…` (the app adds `provider`,
-   `intent`, `next` to it); `/auth/oauth/exchange` takes `{code}`; linking posts `{code}` to
-   `/me/oauth/{provider}/link` (started with `intent=link`). Providers: `{providers: [...]}`.
-8. **MFA setup**: `POST /me/mfa/totp` → `{secret, otpauth_uri}`; confirm `{code}` →
-   `{recovery_codes}`; `DELETE /me/mfa/totp` and `POST /me/mfa/recovery-codes` take `{code}`.
-9. **Sessions**: `[{id, current, device, ip_address, created_at, last_seen_at}]` (a raw user agent in
-   `device` is shown as "Chrome on Windows").
-10. **Children**: list `[{id, display_name, grade_level, username, sign_in_method}]`; create
-    `{display_name, grade_level, parental_consent: true}`; sign-in setup
-    `{method: "password", username, password}` or `{method: "pictures", username, pictures: [3 keys]}`;
-    link `{code}`; active child `{child_id}`; student link code → `{code, expires_at}`.
-11. **Classroom sign-in (not in the endpoint list)**: `GET /auth/class/{code}` →
-    `{class_name, students[{id, display_name, avatar_url}], pictures?[keys]}` and
-    `POST /auth/login/pictures` `{class_code, student_id, pictures: [3 keys, in order]}` → tokens.
-    Picture keys: `cat dog star sun moon tree fish apple rocket flower bird car`
-    (`src/features/auth/pictures.tsx`).
-12. **Admin**: `GET /admin/users?q&role&limit&offset` → page envelope of
-    `{id, role, display_name, email, username, is_active, email_verified, mfa_enabled,
-    teacher_verified, created_at, last_login_at}`; `PATCH` `{role?, is_active?}`;
-    teacher verification `{verified}`; impersonate → tokens.
+## Social sign-in setup
+
+Set the keys of each provider (README, Configuration) and register `<APP_URL>/auth/callback` as its
+redirect URI. The server uses the authorization code flow with PKCE (Google, Microsoft), a state bound to
+the browser by a cookie, and a nonce; the ID token is fetched directly from the provider over TLS and its
+issuer, audience, expiry and nonce are checked. Apple answers with a cross-site form POST, which the
+callback turns into a same-site GET (so the SameSite=Lax cookies come along). Microsoft work accounts'
+email counts as confirmed only with the `xms_edov` optional claim (personal Microsoft accounts always).
 
 ## Testing
 
-All flows were exercised end to end in Chromium against a mock backend implementing the checklist
-above (sign-in for every role, MFA and recovery codes, picture sign-in with lockout, sign-up and email
-verification, password reset, OAuth sign-in and linking, account settings, families, admin and
-impersonation, refresh, sessions ended elsewhere, CSRF refusal, open-redirect refusal, no token ever in
-a browser response), at 360 / 390 / 1280 px in light and dark, with no axe violations. The scenarios
-should become Playwright tests with MSW (FE-OPS-04, FE-OPS-05).
+`npm test` runs the API integration tests in `tests/api` against a real PostgreSQL database: sign-up and
+verification (including enumeration-safety), sign-in for every method, lockouts, CSRF refusal, password
+reset, MFA with replay and recovery codes, sessions (list, end one, end others, after a password change),
+email change, families, link codes, admin actions and impersonation, the catalog, and the error envelope.
+`tests/api/oauth.test.ts` runs the OAuth round trip with only the provider's token endpoint stubbed (PKCE,
+state bound to the cookie, nonce, sign-up with a role, no takeover of an existing email, linking, unlinking,
+the MFA step, Apple's form POST). `tests/unit` covers TOTP (RFC 6238 test vectors), secret encryption, OAuth
+claim checks and redirect safety.
+The browser flows (sign-up from the emailed link, picture sign-in, MFA setup and sign-in, impersonation)
+were exercised end to end in Chromium against the production build; they should become Playwright tests
+(FE-OPS-04). OAuth has not yet been run against the real Google, Microsoft and Apple services (BE-APP-05).

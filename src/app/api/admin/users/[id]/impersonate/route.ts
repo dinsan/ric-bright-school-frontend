@@ -1,29 +1,23 @@
 import type { NextRequest } from "next/server";
-import { paths } from "@/features/auth/contract";
-import { callBackend, errorResponse, isSameSite, toBrowserResponse } from "@/lib/server/bff";
-import { COOKIE, isSecureRequest } from "@/lib/server/session";
+import type { SignInResult } from "@/features/auth/contract";
+import { meFor } from "@/server/accounts/queries";
+import { startImpersonation } from "@/server/admin/service";
+import { requireAuth } from "@/server/auth/context";
+import { IMPERSONATION_SESSION_SECONDS, writeImpersonatorCookie, writeSessionCookies } from "@/server/auth/session";
+import { isSecureRequest } from "@/server/http/request";
+import { parseId } from "@/server/http/validation";
+import { json, type Params, route } from "@/server/http/route";
 
 /**
- * Starts a support impersonation: the backend issues time-limited tokens for the user. The admin's
- * own refresh token is kept aside (httpOnly) so "Stop" can return to the admin session.
+ * Starts a support impersonation: the browser switches to a one-hour session as the user. The admin's
+ * own session token is kept aside (httpOnly) so "Stop viewing" (DELETE /api/impersonation) returns to it.
  */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isSameSite(request)) return errorResponse(403, "cross_site_request", "This request must come from the Lumina site.");
-  if (request.cookies.has(COOKIE.impersonator)) {
-    return errorResponse(409, "already_impersonating", "Stop the current impersonation first.");
-  }
-  const adminRefresh = request.cookies.get(COOKIE.refresh)?.value;
-  const { id } = await params;
-  const result = await callBackend(request, { path: paths.adminImpersonate(id), method: "POST", body: await request.text(), contentType: "application/json" });
-  const response = await toBrowserResponse(request, result);
-  if (result.response.ok && adminRefresh && response.cookies.get(COOKIE.access)) {
-    response.cookies.set(COOKIE.impersonator, adminRefresh, {
-      path: "/",
-      sameSite: "lax",
-      secure: isSecureRequest(request),
-      httpOnly: true,
-      maxAge: 60 * 60 * 8,
-    });
-  }
+export const POST = route(async (request: NextRequest, { params }: Params<{ id: string }>) => {
+  const auth = await requireAuth(request, ["admin"]);
+  const { target, created } = await startImpersonation(auth, parseId((await params).id, "That user"), request);
+  const response = json<SignInResult>({ signed_in: true, user: await meFor(target) });
+  const secure = isSecureRequest(request);
+  writeSessionCookies(response.cookies, created.token, target.role, secure, IMPERSONATION_SESSION_SECONDS);
+  writeImpersonatorCookie(response.cookies, auth.token, secure);
   return response;
-}
+});

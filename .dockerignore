@@ -1,27 +1,14 @@
-# Dependencies and build output are recreated inside the image.
+# Keep the build context small and free of secrets: env files are never copied into an image.
 node_modules
 .next
-out
-coverage
-*.tsbuildinfo
-next-env.d.ts
-
-# Local environment files must not leak into the image.
-.env*
-!.env.example
-
-# Not needed to build the app.
-docs
-scripts
 .git
-.gitignore
-.dockerignore
-Dockerfile
-docker-compose.yml
-Makefile
-README.md
-TODO.md
+.env
+.env.*
+!.env.example
 *.log
+*.tsbuildinfo
+coverage
 .DS_Store
-.idea
-.vscode
+__MACOSX
+# The Prisma Client is generated inside the image (from prisma/schema.prisma).
+src/generated

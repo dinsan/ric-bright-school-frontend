@@ -4,7 +4,11 @@ import { SignUpForm } from "@/features/auth/components/sign-up-form";
 
 export const metadata: Metadata = { title: "Create an account" };
 
-export default function SignUpPage() {
+type Props = { searchParams: Promise<{ role?: string }> };
+
+/** `?role=parent` or `?role=teacher` (from the home page) chooses the account type in advance. */
+export default async function SignUpPage({ searchParams }: Props) {
+  const { role } = await searchParams;
   return (
     <AuthCard
       title="Create an account"
@@ -15,7 +19,7 @@ export default function SignUpPage() {
         </p>
       }
     >
-      <SignUpForm />
+      <SignUpForm initialRole={role === "parent" || role === "teacher" ? role : undefined} />
     </AuthCard>
   );
 }

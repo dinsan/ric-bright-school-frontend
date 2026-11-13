@@ -1,5 +1,5 @@
-// Mirrors the backend's response schemas (backend/app/modules/catalog/schemas.py).
-// When the API stabilises, generate these from /openapi.json instead of hand-maintaining them.
+// The catalog API's JSON shapes, shared by the browser (./api.ts) and the server that produces them
+// (src/server/catalog/service.ts), so the compiler checks both ends.
 
 export type CourseStatus = "draft" | "published" | "archived";
 

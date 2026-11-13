@@ -8,7 +8,7 @@ import type { Me } from "./contract";
 
 export const sessionKey = ["session"] as const;
 
-/** The signed-in user (or null), from the gateway. `initial` comes from the server in signed-in areas. */
+/** The signed-in user (or null), from /api/session. `initial` comes from the server in signed-in areas. */
 export function useSession(initial?: SessionPayload) {
   return useQuery({
     queryKey: sessionKey,

@@ -1,0 +1,365 @@
+// The database schema (PostgreSQL, Prisma ORM 7). Source of truth for tables, columns, relations and
+// indexes: migrations in prisma/migrations are generated from it with `npm run db:generate`.
+//
+// Conventions: UUID primary keys (gen_random_uuid, built into PostgreSQL 13+), timestamptz everywhere,
+// snake_case in the database (@map), emails and usernames stored lower-case, secrets only ever stored
+// hashed or encrypted. Constraint and index names are explicit (map: …) so they stay stable.
+//
+// Not expressible in this file, and therefore kept in migration SQL (see docs/backend.md, "Changing the
+// schema"), which Prisma leaves alone:
+//   - the pg_trgm extension (typo-tolerant search);
+//   - CHECK constraints (lower-case emails and usernames, grade 1–12, lesson position and duration);
+//   - the generated `search_vector` columns of courses and lessons (full-text search).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Enums -------------------------------------------------------------------------------------------
+
+enum UserRole {
+  student
+  parent
+  teacher
+  admin
+
+  @@map("user_role")
+}
+
+enum CourseStatus {
+  draft
+  published
+  archived
+
+  @@map("course_status")
+}
+
+/// standard: normal sign-in (sliding expiry). classroom: picture sign-in on a shared device (one school
+/// day). impersonation: an admin viewing as the user.
+enum SessionKind {
+  standard
+  classroom
+  impersonation
+
+  @@map("session_kind")
+}
+
+enum TokenPurpose {
+  email_verification
+  password_reset
+  email_change
+  mfa_challenge
+  parent_link
+  oauth_state
+
+  @@map("token_purpose")
+}
+
+// --- Accounts ----------------------------------------------------------------------------------------
+
+model User {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role              UserRole
+  displayName       String    @map("display_name") @db.VarChar(80)
+  /// Lower-case. Students may have none.
+  email             String?   @unique(map: "users_email_key") @db.VarChar(254)
+  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  /// Lower-case. Students sign in with it.
+  username          String?   @unique(map: "users_username_key") @db.VarChar(30)
+  /// argon2id. Null for accounts that only use pictures or Google / Microsoft / Apple.
+  passwordHash      String?   @map("password_hash")
+  /// argon2id of the three picture keys in order (classroom sign-in).
+  pictureHash       String?   @map("picture_hash")
+  /// TOTP secret, encrypted with AUTH_SECRET (AES-256-GCM).
+  totpSecret        String?   @map("totp_secret")
+  /// Secret being set up, until the first code confirms it. Encrypted like totp_secret.
+  totpPendingSecret String?   @map("totp_pending_secret")
+  /// Last accepted TOTP time step: a code can't be used twice.
+  totpLastStep      Int?      @map("totp_last_step")
+  mfaEnabledAt      DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
+  avatarUrl         String?   @map("avatar_url")
+  gradeLevel        Int?      @map("grade_level") @db.SmallInt
+  language          String?   @db.VarChar(10)
+  timezone          String?   @db.VarChar(64)
+  /// Parents: the child the app is showing.
+  activeChildId     String?   @map("active_child_id") @db.Uuid
+  /// Who made this account (a parent adding a child).
+  createdById       String?   @map("created_by_id") @db.Uuid
+  isActive          Boolean   @default(true) @map("is_active")
+  /// Failed sign-ins in a row, and the lock that follows too many.
+  failedSignIns     Int       @default(0) @map("failed_sign_ins")
+  lockedUntil       DateTime? @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  activeChild   User?  @relation("ActiveChild", fields: [activeChildId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "users_active_child_id_users_id_fk")
+  activeChildOf User[] @relation("ActiveChild")
+  createdBy     User?  @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "users_created_by_id_users_id_fk")
+  createdUsers  User[] @relation("CreatedBy")
+
+  teacherProfile   TeacherProfile?  @relation("TeacherProfileOwner")
+  verifiedProfiles TeacherProfile[] @relation("TeacherProfileVerifier")
+  guardianOf       Guardianship[]   @relation("GuardianshipParent")
+  guardedBy        Guardianship[]   @relation("GuardianshipChild")
+  sessions         Session[]        @relation("SessionUser")
+  impersonations   Session[]        @relation("SessionImpersonator")
+  authTokens       AuthToken[]
+  recoveryCodes    RecoveryCode[]
+  oauthAccounts    OAuthAccount[]
+  classesTaught    Class[]
+  classMemberships ClassMember[]
+  coursesCreated   Course[]
+  auditActions     AuditEvent[]     @relation("AuditActor")
+  auditTargets     AuditEvent[]     @relation("AuditTarget")
+
+  @@index([role], map: "users_role_idx")
+  @@index([createdAt], map: "users_created_at_idx")
+  @@map("users")
+}
+
+model TeacherProfile {
+  userId       String    @id @map("user_id") @db.Uuid
+  schoolName   String?   @map("school_name") @db.VarChar(120)
+  /// Subject slugs.
+  subjects     String[]  @default([])
+  gradeLevels  Int[]     @default([]) @map("grade_levels") @db.SmallInt
+  bio          String?   @db.VarChar(600)
+  verifiedAt   DateTime? @map("verified_at") @db.Timestamptz(6)
+  verifiedById String?   @map("verified_by_id") @db.Uuid
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User  @relation("TeacherProfileOwner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "teacher_profiles_user_id_users_id_fk")
+  verifiedBy User? @relation("TeacherProfileVerifier", fields: [verifiedById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "teacher_profiles_verified_by_id_users_id_fk")
+
+  @@map("teacher_profiles")
+}
+
+/// A parent or guardian and a child (student) account.
+model Guardianship {
+  parentId  String    @map("parent_id") @db.Uuid
+  childId   String    @map("child_id") @db.Uuid
+  /// When the parent confirmed they are the parent or guardian and agreed for the child.
+  consentAt DateTime? @map("consent_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  parent User @relation("GuardianshipParent", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "guardianships_parent_id_users_id_fk")
+  child  User @relation("GuardianshipChild", fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "guardianships_child_id_users_id_fk")
+
+  @@id([parentId, childId], map: "guardianships_parent_id_child_id_pk")
+  @@index([childId], map: "guardianships_child_idx")
+  @@map("guardianships")
+}
+
+// --- Sign-in -----------------------------------------------------------------------------------------
+
+/// Server-side sessions. The browser holds a random token; only its SHA-256 is stored.
+model Session {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String      @map("user_id") @db.Uuid
+  tokenHash      String      @unique(map: "sessions_token_hash_key") @map("token_hash") @db.VarChar(64)
+  kind           SessionKind @default(standard)
+  /// The admin viewing as this user (kind = impersonation).
+  impersonatorId String?     @map("impersonator_id") @db.Uuid
+  userAgent      String?     @map("user_agent")
+  ipAddress      String?     @map("ip_address") @db.VarChar(64)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt     DateTime    @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt      DateTime    @map("expires_at") @db.Timestamptz(6)
+
+  user         User  @relation("SessionUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sessions_user_id_users_id_fk")
+  impersonator User? @relation("SessionImpersonator", fields: [impersonatorId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sessions_impersonator_id_users_id_fk")
+
+  @@index([userId], map: "sessions_user_idx")
+  @@index([expiresAt], map: "sessions_expires_at_idx")
+  @@map("sessions")
+}
+
+/// One-time tokens sent by email or kept in a cookie: email verification, password reset, email change,
+/// the MFA step after a password, a student's parent-link code, OAuth state. Only the SHA-256 is stored.
+model AuthToken {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purpose   TokenPurpose
+  tokenHash String       @unique(map: "auth_tokens_token_hash_key") @map("token_hash") @db.VarChar(64)
+  userId    String?      @map("user_id") @db.Uuid
+  data      Json         @default("{}") @db.JsonB
+  /// Wrong guesses against this token (the MFA step).
+  attempts  Int          @default(0)
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "auth_tokens_user_id_users_id_fk")
+
+  @@index([userId, purpose], map: "auth_tokens_user_purpose_idx")
+  @@index([expiresAt], map: "auth_tokens_expires_at_idx")
+  @@map("auth_tokens")
+}
+
+/// MFA recovery codes, SHA-256 of the normalised code. Each works once.
+model RecoveryCode {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash") @db.VarChar(64)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "recovery_codes_user_id_users_id_fk")
+
+  @@unique([userId, codeHash], map: "recovery_codes_user_code_key")
+  @@map("recovery_codes")
+}
+
+/// Google / Microsoft / Apple identities linked to an account.
+model OAuthAccount {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  provider  String   @db.VarChar(20)
+  /// The provider's stable user id (`sub`).
+  subject   String
+  email     String?  @db.VarChar(254)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "oauth_accounts_user_id_users_id_fk")
+
+  @@unique([provider, subject], map: "oauth_accounts_provider_subject_key")
+  @@unique([userId, provider], map: "oauth_accounts_user_provider_key")
+  @@map("oauth_accounts")
+}
+
+// --- Schools -----------------------------------------------------------------------------------------
+
+/// A teacher's class. Its code lets young students sign in with pictures on a classroom device.
+model Class {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teacherId String   @map("teacher_id") @db.Uuid
+  name      String   @db.VarChar(80)
+  /// Upper-case.
+  code      String   @unique(map: "classes_code_key") @db.VarChar(12)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  teacher User          @relation(fields: [teacherId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "classes_teacher_id_users_id_fk")
+  members ClassMember[]
+
+  @@index([teacherId], map: "classes_teacher_idx")
+  @@map("classes")
+}
+
+model ClassMember {
+  classId   String   @map("class_id") @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "class_members_class_id_classes_id_fk")
+  student User  @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "class_members_student_id_users_id_fk")
+
+  @@id([classId, studentId], map: "class_members_class_id_student_id_pk")
+  @@index([studentId], map: "class_members_student_idx")
+  @@map("class_members")
+}
+
+// --- Catalog -----------------------------------------------------------------------------------------
+
+model Subject {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String   @unique(map: "subjects_slug_key") @db.VarChar(80)
+  name        String   @db.VarChar(80)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@map("subjects")
+}
+
+model Course {
+  id           String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug         String                   @unique(map: "courses_slug_key") @db.VarChar(120)
+  title        String                   @db.VarChar(160)
+  summary      String                   @db.VarChar(400)
+  description  String?
+  gradeLevel   Int                      @map("grade_level") @db.SmallInt
+  status       CourseStatus             @default(draft)
+  publishedAt  DateTime?                @map("published_at") @db.Timestamptz(6)
+  subjectId    String                   @map("subject_id") @db.Uuid
+  createdById  String?                  @map("created_by_id") @db.Uuid
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Weighted full-text search text, generated by PostgreSQL from title (A), summary (B) and description
+  /// (C), each with English stemming and as written. Defined in migration SQL; read-only.
+  /// The default below is the GENERATED ALWAYS AS expression, as Prisma reads it back: it tells Prisma the
+  /// column is computed, so migrations leave it alone. Keep it in sync with the migration SQL.
+  searchVector Unsupported("tsvector")? @default(dbgenerated("((setweight((to_tsvector('english'::regconfig, (COALESCE(title, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text)), 'A'::\"char\") || setweight((to_tsvector('english'::regconfig, (COALESCE(summary, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(summary, ''::character varying))::text)), 'B'::\"char\")) || setweight((to_tsvector('english'::regconfig, COALESCE(description, ''::text)) || to_tsvector('simple'::regconfig, COALESCE(description, ''::text))), 'C'::\"char\"))")) @map("search_vector")
+
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "courses_subject_id_subjects_id_fk")
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "courses_created_by_id_users_id_fk")
+  lessons   Lesson[]
+
+  @@index([status, gradeLevel], map: "courses_status_grade_idx")
+  @@index([subjectId], map: "courses_subject_idx")
+  @@index([searchVector], map: "courses_search_idx", type: Gin)
+  // Typo-tolerant matching on titles (pg_trgm).
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "courses_title_trgm_idx", type: Gin)
+  @@map("courses")
+}
+
+/// The lessons of a course, in order. For now a lesson is its title, summary and length (the course
+/// outline, and what search finds); the lesson content comes with the lesson player (FE-STU-03).
+/// A lesson is public when its course is published.
+model Lesson {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId        String                   @map("course_id") @db.Uuid
+  /// Unique within its course; also the anchor on the course page (#lesson-{slug}).
+  slug            String                   @db.VarChar(120)
+  title           String                   @db.VarChar(160)
+  summary         String                   @db.VarChar(400)
+  /// 1, 2, 3… within the course.
+  position        Int                      @db.SmallInt
+  durationMinutes Int?                     @map("duration_minutes") @db.SmallInt
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Generated by PostgreSQL from title (A) and summary (B). Defined in migration SQL; read-only.
+  searchVector    Unsupported("tsvector")? @default(dbgenerated("(setweight((to_tsvector('english'::regconfig, (COALESCE(title, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text)), 'A'::\"char\") || setweight((to_tsvector('english'::regconfig, (COALESCE(summary, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(summary, ''::character varying))::text)), 'B'::\"char\"))")) @map("search_vector")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lessons_course_id_courses_id_fk")
+
+  @@unique([courseId, slug], map: "lessons_course_slug_key")
+  @@index([courseId, position], map: "lessons_course_position_idx")
+  @@index([searchVector], map: "lessons_search_idx", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "lessons_title_trgm_idx", type: Gin)
+  @@map("lessons")
+}
+
+// --- Operations --------------------------------------------------------------------------------------
+
+/// Who did what to whom: admin actions and impersonation. Kept when either account is deleted.
+model AuditEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId      String?  @map("actor_id") @db.Uuid
+  action       String   @db.VarChar(64)
+  targetUserId String?  @map("target_user_id") @db.Uuid
+  data         Json     @default("{}") @db.JsonB
+  ipAddress    String?  @map("ip_address") @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor      User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "audit_events_actor_id_users_id_fk")
+  targetUser User? @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "audit_events_target_user_id_users_id_fk")
+
+  @@index([createdAt], map: "audit_events_created_at_idx")
+  @@index([targetUserId], map: "audit_events_target_idx")
+  @@map("audit_events")
+}
+
+/// Fixed-window request counters (sign-in attempts, class code lookups, emails sent).
+model RateLimit {
+  key         String   @id @db.VarChar(200)
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  count       Int
+
+  @@map("rate_limits")
+}

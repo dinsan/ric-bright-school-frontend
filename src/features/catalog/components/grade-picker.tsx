@@ -18,8 +18,8 @@ export function GradePicker() {
                   bandForGrade(grade).tile,
                 )}
               >
-                <span className="sr-only">Grade </span>
-                {grade}
+                {/* Space outside the hidden span, so the name is "Grade 4" (not "Grade4") everywhere. */}
+                <span className="sr-only">Grade</span> {grade}
               </Link>
             </li>
           ))}

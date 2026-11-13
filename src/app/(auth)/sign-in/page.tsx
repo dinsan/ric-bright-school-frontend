@@ -5,10 +5,35 @@ import { SignInForm } from "@/features/auth/components/sign-in-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-type Props = { searchParams: Promise<{ next?: string; error?: string }> };
+type Props = { searchParams: Promise<{ next?: string; error?: string; step?: string }> };
+
+/** Why Google / Microsoft / Apple sign-in came back here (see src/server/oauth/service.ts). */
+const oauthErrors: Record<string, { title: string; body: string }> = {
+  oauth: {
+    title: "That didn't work",
+    body: "We couldn't sign you in with that account. Try again, or use your email and password.",
+  },
+  oauth_no_account: {
+    title: "No Lumina account uses that sign-in yet",
+    body: "Create an account first (you can use the same button on the sign-up page), or sign in with your email and link it in Sign-in and security.",
+  },
+  oauth_email_taken: {
+    title: "You already have an account with this email",
+    body: "Sign in with your email and password, then link it in Sign-in and security to use it next time.",
+  },
+  oauth_email_unverified: {
+    title: "We couldn't confirm that email address",
+    body: "That account didn't confirm its email address to us. Sign up with your email and a password instead.",
+  },
+  account_disabled: {
+    title: "This account is turned off",
+    body: "Ask your school or contact Lumina support.",
+  },
+};
 
 export default async function SignInPage({ searchParams }: Props) {
-  const { next, error } = await searchParams;
+  const { next, error, step } = await searchParams;
+  const problem = error ? (oauthErrors[error] ?? oauthErrors.oauth) : null;
   return (
     <AuthCard
       title="Sign in"
@@ -27,12 +52,12 @@ export default async function SignInPage({ searchParams }: Props) {
         </>
       }
     >
-      {error === "oauth" && (
-        <Alert tone="danger" title="That didn't work">
-          We couldn&apos;t sign you in with that account. Try again, or use your email and password.
+      {problem && (
+        <Alert tone="danger" title={problem.title}>
+          {problem.body}
         </Alert>
       )}
-      <SignInForm next={next} />
+      <SignInForm next={next} initialStep={step === "mfa" ? "mfa" : "credentials"} />
     </AuthCard>
   );
 }

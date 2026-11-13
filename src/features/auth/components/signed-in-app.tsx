@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { ChildSwitcher } from "@/features/family/components/child-switcher";
+import { SearchButton } from "@/features/search/components/search-button";
 import { authApi } from "../api";
 import type { Me } from "../contract";
 import { useSession } from "../session";
@@ -32,7 +33,12 @@ export function SignedInApp({ initialUser, impersonating, children }: { initialU
       role={user.role}
       user={{ name: user.display_name, avatarUrl: user.avatar_url }}
       banner={session.data?.impersonating ? <ImpersonationBanner user={user} /> : null}
-      actions={user.role === "parent" ? <ChildSwitcher activeChildId={user.active_child_id} /> : null}
+      actions={
+        <>
+          <SearchButton compact />
+          {user.role === "parent" && <ChildSwitcher activeChildId={user.active_child_id} />}
+        </>
+      }
     >
       {children}
     </AppShell>

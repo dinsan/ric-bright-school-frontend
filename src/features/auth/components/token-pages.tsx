@@ -14,9 +14,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { fields } from "@/lib/forms/zod";
 import { messages } from "@/lib/forms/messages";
 import { authApi } from "../api";
-import { roleHome } from "../contract";
+import { PASSWORD_MAX, PASSWORD_MIN, roleHome } from "../contract";
 import { useSignedIn } from "../use-signed-in";
-import { PASSWORD_MIN } from "./sign-up-form";
 
 /** One-time links must be used once: no retries, no refetching. */
 const oneShot = { retry: false, staleTime: Infinity, gcTime: Infinity, refetchOnMount: false, refetchOnReconnect: false } as const;
@@ -105,7 +104,7 @@ export function ForgotPassword() {
 
 const resetSchema = z
   .object({
-    password: fields.text("a new password", { min: PASSWORD_MIN, max: 128 }),
+    password: fields.text("a new password", { min: PASSWORD_MIN, max: PASSWORD_MAX }),
     confirm: z.string().min(1, messages.required("the new password again")),
   })
   .refine((values) => values.password === values.confirm, { path: ["confirm"], message: "The two passwords are different. Type the same one twice." });

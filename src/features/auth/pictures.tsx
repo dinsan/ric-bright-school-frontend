@@ -1,5 +1,5 @@
 import { Apple, Bird, Car, Cat, Dog, Fish, Flower2, Moon, Rocket, Star, Sun, TreePine, type LucideIcon } from "lucide-react";
-import type { PictureKey } from "./contract";
+import { PICTURE_KEYS as KEYS, type PictureKey } from "./contract";
 
 /**
  * The picture set for picture passwords (classroom sign-in for Grades 1–3). Keys are what the API
@@ -13,7 +13,8 @@ export interface PictureInfo {
   tone: string;
 }
 
-export const PICTURES: Record<PictureKey, PictureInfo> = {
+/** One entry per key in the contract's PICTURE_KEYS (the compiler checks none is missing). */
+export const PICTURES: Record<(typeof KEYS)[number], PictureInfo> = {
   cat: { label: "Cat", icon: Cat, tone: "bg-accent text-accent-fg" },
   dog: { label: "Dog", icon: Dog, tone: "bg-info-soft text-info-soft-fg" },
   star: { label: "Star", icon: Star, tone: "bg-band-high text-band-high-fg" },
@@ -28,8 +29,8 @@ export const PICTURES: Record<PictureKey, PictureInfo> = {
   car: { label: "Car", icon: Car, tone: "bg-success text-success-fg" },
 };
 
-export const PICTURE_KEYS = Object.keys(PICTURES) as PictureKey[];
+export const PICTURE_KEYS: PictureKey[] = [...KEYS];
 
 export function pictureInfo(key: PictureKey): PictureInfo {
-  return PICTURES[key] ?? { label: key, icon: Star, tone: "bg-surface-sunken text-fg" };
+  return PICTURES[key as (typeof KEYS)[number]] ?? { label: key, icon: Star, tone: "bg-surface-sunken text-fg" };
 }

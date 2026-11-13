@@ -11,9 +11,9 @@ import { subscribePreferences } from "@/lib/preferences";
 const SIGNED_IN_AREAS = /^\/(learn|teach|family|admin|account)(\/|$)/;
 
 /**
- * A request from a signed-in page got 401. The gateway already tried to refresh, so the session is
- * probably over; but some endpoints may answer 401 for other reasons (a wrong current password), so
- * ask the gateway first. If the session really ended: sign in, then come back to this page.
+ * A request from a signed-in page got 401, so the session has probably ended (signed out on another
+ * device, expired, account turned off). Some endpoints may answer 401 for other reasons, so ask
+ * /api/session first. If the session really ended: sign in, then come back to this page.
  */
 async function handleSessionEnd(error: unknown) {
   if (!(error instanceof ApiError) || error.status !== 401) return;

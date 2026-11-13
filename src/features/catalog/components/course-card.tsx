@@ -10,8 +10,7 @@ export function CourseCard({ course }: { course: Course }) {
         <div className="flex items-center gap-3">
           <GradeMark grade={course.grade_level} className="size-11 text-2xl" />
           <p className="text-small font-bold text-fg-muted">
-            <span className="sr-only">Grade {course.grade_level}, </span>
-            {course.subject.name}
+            <span className="sr-only">Grade {course.grade_level},</span> {course.subject.name}
           </p>
         </div>
         <div>

@@ -15,13 +15,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/forms/messages";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { authApi } from "../api";
 import type { ClassRoster, PictureKey } from "../contract";
 import { PICTURE_KEYS, pictureInfo } from "../pictures";
 import { useSignedIn } from "../use-signed-in";
 
 /** On a shared classroom device the class code is remembered, so children start at "Who are you?". */
-const DEVICE_CLASS_KEY = "lumina:class-code";
+const DEVICE_CLASS_KEY = STORAGE_KEYS.classCode;
 const PICTURE_COUNT = 3;
 
 type Student = ClassRoster["students"][number];

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "Admin" };
 

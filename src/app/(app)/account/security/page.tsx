@@ -6,7 +6,7 @@ import {
   PasswordSection,
   SessionsSection,
 } from "@/features/account/components/security-sections";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "Sign-in and security" };
 

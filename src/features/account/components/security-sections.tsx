@@ -18,8 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
 import { oauthStartUrl } from "@/features/auth/api";
 import { providerNames } from "@/features/auth/components/social-sign-in";
-import { PASSWORD_MIN } from "@/features/auth/components/sign-up-form";
-import type { Me, OAuthProvider, TotpSetup } from "@/features/auth/contract";
+import { PASSWORD_MAX, PASSWORD_MIN, type Me, type OAuthProvider, type TotpSetup } from "@/features/auth/contract";
 import { authApi } from "@/features/auth/api";
 import { useUser } from "@/features/auth/session";
 import { useQuery } from "@tanstack/react-query";
@@ -35,7 +34,7 @@ import { AccountSection } from "./section";
 const passwordSchema = z
   .object({
     current_password: z.string().min(1, messages.required("your current password")),
-    new_password: fields.text("a new password", { min: PASSWORD_MIN, max: 128 }),
+    new_password: fields.text("a new password", { min: PASSWORD_MIN, max: PASSWORD_MAX }),
     confirm: z.string().min(1, messages.required("the new password again")),
   })
   .refine((values) => values.new_password === values.confirm, { path: ["confirm"], message: "The two passwords are different. Type the same one twice." })
@@ -348,7 +347,7 @@ export function LinkedAccountsSection({ linkResult }: { linkResult?: { status: s
 
 // --- Sessions ------------------------------------------------------------------------------------------
 
-/** "Chrome on Windows" from a raw user agent (if the backend sends one); other values as they are. */
+/** "Chrome on Windows" from the raw user agent the API sends; other values as they are. */
 export function describeDevice(device: string | null): string {
   if (!device) return "Unknown device";
   if (!device.startsWith("Mozilla/")) return device;

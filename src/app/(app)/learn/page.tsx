@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "Home" };
 

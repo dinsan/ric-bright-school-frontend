@@ -1,31 +1,31 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { paths } from "@/features/auth/contract";
-import { callBackend, errorResponse, isSameSite } from "@/lib/server/bff";
-import { clearSession, COOKIE, fetchMe, isSecureRequest, refreshTokens, writeSession } from "@/lib/server/session";
+import type { NextRequest } from "next/server";
+import { meFor } from "@/server/accounts/queries";
+import { audit } from "@/server/audit";
+import { clearSessionCookies, COOKIE, deleteSessionByToken, validateSessionToken, writeSessionCookies } from "@/server/auth/session";
+import { HttpError } from "@/server/http/errors";
+import { isSecureRequest } from "@/server/http/request";
+import { json, route, toErrorResponse } from "@/server/http/route";
 
 /** Stops an impersonation: ends the borrowed session and restores the admin's own. */
-export async function DELETE(request: NextRequest) {
-  if (!isSameSite(request)) return errorResponse(403, "cross_site_request", "This request must come from the Lumina site.");
-  const adminRefresh = request.cookies.get(COOKIE.impersonator)?.value;
-  if (!adminRefresh) return errorResponse(409, "not_impersonating", "You are not viewing as someone else.");
+export const DELETE = route(async (request: NextRequest) => {
+  const adminToken = request.cookies.get(COOKIE.impersonator)?.value;
+  if (!adminToken) throw new HttpError(409, "not_impersonating", "You are not viewing as someone else.");
 
-  await callBackend(request, {
-    path: paths.logout,
-    method: "POST",
-    body: JSON.stringify({ refresh_token: request.cookies.get(COOKIE.refresh)?.value ?? null }),
-    contentType: "application/json",
-  }).catch(() => null);
+  const borrowedToken = request.cookies.get(COOKIE.session)?.value;
+  const borrowed = borrowedToken ? await validateSessionToken(borrowedToken) : null;
+  if (borrowedToken) await deleteSessionByToken(borrowedToken);
 
-  const refreshed = await refreshTokens(adminRefresh);
-  const tokens = refreshed.status === "ok" ? refreshed.tokens : null;
-  const admin = tokens ? await fetchMe(tokens.access_token) : null;
-  if (!tokens || !admin) {
-    const ended = errorResponse(401, "session_ended", "Your admin session has ended. Sign in again.");
-    clearSession(ended.cookies);
+  const admin = await validateSessionToken(adminToken);
+  if (!admin || admin.user.role !== "admin") {
+    const ended = toErrorResponse(new HttpError(401, "session_ended", "Your admin session has ended. Sign in again."));
+    clearSessionCookies(ended.cookies);
     return ended;
   }
-  const result = NextResponse.json({ user: admin });
-  writeSession(result.cookies, tokens, admin.role, isSecureRequest(request));
-  result.cookies.delete(COOKIE.impersonator);
-  return result;
-}
+  if (borrowed?.session.impersonatorId === admin.user.id) {
+    await audit(request, { actorId: admin.user.id, action: "admin.impersonation_stopped", targetUserId: borrowed.user.id });
+  }
+  const response = json({ user: await meFor(admin.user) });
+  writeSessionCookies(response.cookies, adminToken, admin.user.role, isSecureRequest(request));
+  response.cookies.delete(COOKIE.impersonator);
+  return response;
+});

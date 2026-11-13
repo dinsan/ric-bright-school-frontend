@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/layout/page-header";
 import { ButtonLink } from "@/components/ui/button";
 import { ChildrenManager } from "@/features/family/components/children-manager";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "Overview" };
 

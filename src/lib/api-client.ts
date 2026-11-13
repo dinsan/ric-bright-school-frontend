@@ -1,5 +1,3 @@
-import { env } from "@/lib/env";
-
 type QueryValue = string | number | boolean | null | undefined;
 
 export interface ApiFetchOptions extends Omit<RequestInit, "body" | "headers"> {
@@ -8,11 +6,6 @@ export interface ApiFetchOptions extends Omit<RequestInit, "body" | "headers"> {
   searchParams?: Record<string, QueryValue>;
   /** JSON request body. */
   json?: unknown;
-  /**
-   * Base to resolve `path` against. Default: the backend (server: API_URL, browser: NEXT_PUBLIC_API_URL).
-   * A relative base such as "/api" targets this site's own gateway (see lib/bff.ts).
-   */
-  baseUrl?: string;
 }
 
 interface ErrorEnvelope {
@@ -24,7 +17,7 @@ interface ErrorEnvelope {
   };
 }
 
-/** Mirrors the backend's error envelope: `{ error: { code, message, details, request_id } }`. */
+/** Mirrors the API's error envelope: `{ error: { code, message, details, request_id } }` (src/server/http). */
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -51,15 +44,18 @@ export class ApiError extends Error {
   }
 }
 
-function baseUrl(): string {
-  return typeof window === "undefined" ? env.serverApiUrl : env.publicApiUrl;
-}
+/** Where this app's API lives: same origin, so the session cookie goes along and no CORS is involved. */
+export const API_BASE = "/api";
 
-export async function apiFetch<T>(
-  path: string,
-  { searchParams, json, headers, baseUrl: base, ...init }: ApiFetchOptions = {},
-): Promise<T> {
-  const url = base?.startsWith("/") ? new URL(`${base}${path}`, window.location.origin) : new URL(path, base ?? baseUrl());
+/**
+ * Calls this app's API (Route Handlers under src/app/api) from the browser. `path` is a contract path
+ * such as "/me" or "/courses". The `X-Requested-With` header is part of the CSRF protection: the API
+ * refuses state-changing requests without it (src/server/http/request.ts).
+ *
+ * Server Components don't use this: they call the services in src/server directly, without HTTP.
+ */
+export async function apiFetch<T>(path: string, { searchParams, json, headers, ...init }: ApiFetchOptions = {}): Promise<T> {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin);
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
@@ -67,9 +63,11 @@ export async function apiFetch<T>(
   }
 
   const response = await fetch(url, {
+    credentials: "same-origin",
     ...init,
     headers: {
       Accept: "application/json",
+      "X-Requested-With": "lumina",
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
       ...headers,
     },

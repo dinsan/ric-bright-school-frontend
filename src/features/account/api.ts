@@ -1,4 +1,4 @@
-import { bff } from "@/lib/bff";
+import { apiFetch } from "@/lib/api-client";
 import {
   paths,
   type AccountDeletion,
@@ -16,19 +16,19 @@ import {
 } from "@/features/auth/contract";
 
 export const accountApi = {
-  update: (body: MeUpdate) => bff<Me>(paths.me, { method: "PATCH", json: body }),
-  remove: (body: AccountDeletion) => bff<void>(paths.me, { method: "DELETE", json: body }),
-  changePassword: (body: PasswordChange) => bff<unknown>(paths.mePassword, { method: "POST", json: body }),
-  changeEmail: (body: EmailChange) => bff<unknown>(paths.meEmail, { method: "POST", json: body }),
-  sessions: () => bff<Session[]>(paths.sessions),
-  endSession: (id: string) => bff<void>(paths.session(id), { method: "DELETE" }),
-  endOtherSessions: () => bff<unknown>(paths.revokeOtherSessions, { method: "POST" }),
-  linkedAccounts: () => bff<LinkedAccount[]>(paths.linkedAccounts),
-  unlink: (provider: OAuthProvider) => bff<void>(paths.unlinkAccount(provider), { method: "DELETE" }),
-  startTotp: () => bff<TotpSetup>(paths.totp, { method: "POST" }),
-  confirmTotp: (code: string) => bff<RecoveryCodes>(paths.totpConfirm, { method: "POST", json: { code } }),
-  disableTotp: (code: string) => bff<void>(paths.totp, { method: "DELETE", json: { code } }),
-  regenerateRecoveryCodes: (code: string) => bff<RecoveryCodes>(paths.recoveryCodes, { method: "POST", json: { code } }),
-  updateTeacherProfile: (body: TeacherProfileUpdate) => bff<Me>(paths.teacherProfile, { method: "PATCH", json: body }),
-  createLinkCode: () => bff<LinkCode>(paths.linkCode, { method: "POST" }),
+  update: (body: MeUpdate) => apiFetch<Me>(paths.me, { method: "PATCH", json: body }),
+  remove: (body: AccountDeletion) => apiFetch<void>(paths.me, { method: "DELETE", json: body }),
+  changePassword: (body: PasswordChange) => apiFetch<unknown>(paths.mePassword, { method: "POST", json: body }),
+  changeEmail: (body: EmailChange) => apiFetch<unknown>(paths.meEmail, { method: "POST", json: body }),
+  sessions: () => apiFetch<Session[]>(paths.sessions),
+  endSession: (id: string) => apiFetch<void>(paths.session(id), { method: "DELETE" }),
+  endOtherSessions: () => apiFetch<unknown>(paths.revokeOtherSessions, { method: "POST" }),
+  linkedAccounts: () => apiFetch<LinkedAccount[]>(paths.linkedAccounts),
+  unlink: (provider: OAuthProvider) => apiFetch<void>(paths.unlinkAccount(provider), { method: "DELETE" }),
+  startTotp: () => apiFetch<TotpSetup>(paths.totp, { method: "POST" }),
+  confirmTotp: (code: string) => apiFetch<RecoveryCodes>(paths.totpConfirm, { method: "POST", json: { code } }),
+  disableTotp: (code: string) => apiFetch<void>(paths.totp, { method: "DELETE", json: { code } }),
+  regenerateRecoveryCodes: (code: string) => apiFetch<RecoveryCodes>(paths.recoveryCodes, { method: "POST", json: { code } }),
+  updateTeacherProfile: (body: TeacherProfileUpdate) => apiFetch<Me>(paths.teacherProfile, { method: "PATCH", json: body }),
+  createLinkCode: () => apiFetch<LinkCode>(paths.linkCode, { method: "POST" }),
 };

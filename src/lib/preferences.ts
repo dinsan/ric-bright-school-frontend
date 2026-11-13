@@ -11,6 +11,8 @@
  * sets the band with `setGradeBand(gradeBandForGrade(profile.grade))`.
  */
 
+import { STORAGE_KEYS } from "./storage-keys";
+
 export const THEME_PREFERENCES = ["system", "light", "dark", "contrast"] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 export type ResolvedTheme = Exclude<ThemePreference, "system">;
@@ -18,8 +20,8 @@ export type ResolvedTheme = Exclude<ThemePreference, "system">;
 export const GRADE_BAND_IDS = ["elementary", "middle", "high"] as const;
 export type GradeBandId = (typeof GRADE_BAND_IDS)[number];
 
-const THEME_KEY = "lumina:theme";
-const BAND_KEY = "lumina:band";
+const THEME_KEY = STORAGE_KEYS.theme;
+const BAND_KEY = STORAGE_KEYS.band;
 
 export interface Preferences {
   theme: ThemePreference;

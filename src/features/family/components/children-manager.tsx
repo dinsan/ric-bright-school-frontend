@@ -21,9 +21,9 @@ import { Radio, RadioGroup } from "@/components/ui/radio-group";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
-import type { Child, PictureKey } from "@/features/auth/contract";
+import { PolicyLink } from "@/features/auth/components/policy-link";
+import { PASSWORD_MIN, USERNAME_PATTERN, type Child, type PictureKey } from "@/features/auth/contract";
 import { GRADES } from "@/features/catalog/constants";
-import { PASSWORD_MIN } from "@/features/auth/components/sign-up-form";
 import { fields } from "@/lib/forms/zod";
 import { messages } from "@/lib/forms/messages";
 import { familyApi } from "../api";
@@ -160,7 +160,12 @@ function AddChild({ onAdded }: { onAdded: (child: Child) => void }) {
         </FormField>
         <Checkbox
           label="I am this child's parent or legal guardian"
-          description="I agree to Lumina's terms and privacy policy for my child, and to Lumina storing their learning progress."
+          description={
+            <>
+              I agree to Lumina&apos;s <PolicyLink href="/terms">terms</PolicyLink> and <PolicyLink href="/privacy">privacy policy</PolicyLink> for my
+              child, and to Lumina storing their learning progress.
+            </>
+          }
           {...form.register("parental_consent")}
         />
         <DialogFooter>
@@ -208,7 +213,6 @@ function LinkChild({ onDone }: { onDone: () => void }) {
   );
 }
 
-const USERNAME = /^[a-z0-9][a-z0-9._-]{2,29}$/;
 
 const signInSchema = z
   .object({
@@ -218,7 +222,7 @@ const signInSchema = z
       .trim()
       .toLowerCase()
       .min(1, { error: messages.required("a username"), abort: true })
-      .regex(USERNAME, "Use 3 to 30 letters or numbers (dots, dashes and underscores are fine too)."),
+      .regex(USERNAME_PATTERN, "Use 3 to 30 letters or numbers (dots, dashes and underscores are fine too)."),
     password: z.string(),
     pictures: z.array(z.string()),
   })

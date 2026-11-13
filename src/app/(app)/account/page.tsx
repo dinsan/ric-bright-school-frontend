@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DeleteAccountSection } from "@/features/account/components/security-sections";
 import { DisplaySection, ParentLinkSection, ProfileSection, TeacherProfileSection } from "@/features/account/components/profile-forms";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "Your account" };
 

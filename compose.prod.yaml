@@ -1,0 +1,76 @@
+# Lumina as it runs in production: the built image (no hot reload), migrations as a one-off job.
+# For development use compose.yaml (`docker compose up`) instead.
+#
+#   docker compose -f compose.prod.yaml up --build          (or: make prod-up)
+#
+# Needs AUTH_SECRET (it encrypts two-step verification secrets, so keep it stable). Put it in a .env
+# file next to this one, which Compose reads automatically:
+#   echo "AUTH_SECRET=$(openssl rand -base64 48)" >> .env
+#
+# Services: db (PostgreSQL 16) -> migrate (applies migrations, then exits) -> web (the app on :3000).
+# Sample data and demo accounts: docker compose -f compose.prod.yaml run --rm migrate npm run db:seed
+# Its own project (and database volume), separate from the development stack.
+name: lumina-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lumina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumina}
+      POSTGRES_DB: lumina
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Not published: only the app reaches it (and `docker compose -f compose.prod.yaml exec db psql -U lumina`).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumina -d lumina"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgres://lumina:${POSTGRES_PASSWORD:-lumina}@db:5432/lumina
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      args:
+        # The public address, baked into canonical URLs, the sitemap and share images. Localhost builds are noindex.
+        SITE_URL: ${SITE_URL:-${APP_URL:-http://localhost:3000}}
+        SITE_NOINDEX: ${SITE_NOINDEX:-}
+    environment:
+      DATABASE_URL: postgres://lumina:${POSTGRES_PASSWORD:-lumina}@db:5432/lumina
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET, for example in .env - see the top of compose.prod.yaml}
+      # The address people open the app on: used in emails, redirects and the social sign-in callback.
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      # Without SMTP_URL, emails (sign-up links, password resets) are printed to the log: docker compose -f compose.prod.yaml logs web
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-Lumina <no-reply@lumina.local>}
+      # Plain HTTP on localhost: cookies can't be Secure. Remove behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

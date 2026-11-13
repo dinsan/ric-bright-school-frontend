@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
-import type { Me } from "@/features/auth/contract";
+import { LANGUAGES, type Me } from "@/features/auth/contract";
 import { useSubjects } from "@/features/catalog/hooks";
 import { GRADES } from "@/features/catalog/constants";
 import { formatDate } from "@/lib/format";
@@ -24,13 +24,6 @@ import { accountApi } from "../api";
 import { useApplyMe } from "../hooks";
 import { AccountSection } from "./section";
 
-/** Languages the interface can be shown in once translations exist (FE-I18N). */
-const LANGUAGES = [
-  ["en", "English"],
-  ["es", "Español"],
-  ["fr", "Français"],
-  ["pt", "Português"],
-] as const;
 
 // The time zone list comes from the runtime's Intl data, which can differ between the server and the
 // browser. Render only the current value on the server, and the full list after hydration.

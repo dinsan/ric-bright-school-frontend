@@ -5,6 +5,10 @@ keyboard and screen-reader semantics) when the design system was reviewed. They 
 automated one-to-one: component tests with Vitest + Testing Library (FE-OPS-03) and browser flows with
 Playwright (FE-OPS-04). **R** marks a bug that was found and fixed: keep a regression test for it.
 
+Automated so far (`npm run test:unit`): Button, FormField, PasswordInput, Checkbox, Breadcrumb and Pagination in
+`tests/components/design-system.test.tsx`; the Forms section in `tests/components/forms.test.tsx`; the Courses
+lines in `tests/components/catalog.test.tsx`. The rest is tracked in FE-DS-11.
+
 ## Button
 
 - Click fires `onClick`; `disabled` and `loading` buttons do not (mouse, Enter, Space).

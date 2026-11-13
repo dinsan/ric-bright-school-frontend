@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/layout/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { UserDetail } from "@/features/admin/components/user-detail";
-import { requireUser } from "@/lib/server/session";
+import { requireUser } from "@/server/auth/current-user";
 
 export const metadata: Metadata = { title: "User" };
 

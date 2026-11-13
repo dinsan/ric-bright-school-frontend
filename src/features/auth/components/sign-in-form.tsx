@@ -22,9 +22,12 @@ const credentialsSchema = z.object({
   password: z.string().min(1, messages.required("your password")),
 });
 
-/** Email + password sign-in for parents, teachers and admins, with the MFA step when needed. */
-export function SignInForm({ next }: { next?: string | null }) {
-  const [step, setStep] = useState<"credentials" | "mfa">("credentials");
+/**
+ * Email + password sign-in for parents, teachers and admins, with the MFA step when needed.
+ * `initialStep="mfa"`: Google / Microsoft / Apple already confirmed who it is; only the code is missing.
+ */
+export function SignInForm({ next, initialStep = "credentials" }: { next?: string | null; initialStep?: "credentials" | "mfa" }) {
+  const [step, setStep] = useState<"credentials" | "mfa">(initialStep);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const signedIn = useSignedIn(next);
   const form = useZodForm(credentialsSchema, { defaultValues: { email: "", password: "" } });

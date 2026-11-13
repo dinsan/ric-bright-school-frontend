@@ -1,40 +1,75 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { getCourseBySlug } from "@/features/catalog/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card } from "@/components/ui/card";
 import { courseDetailLayout as layout } from "@/features/catalog/components/course-detail-layout";
+import { CourseOutline, totalMinutes } from "@/features/catalog/components/course-outline";
 import { GradeMark } from "@/features/catalog/components/grade-tile";
-import { ApiError } from "@/lib/api-client";
+import { JsonLd } from "@/components/seo/json-ld";
+import { absoluteUrl, siteConfig } from "@/config/site";
+import type { Course } from "@/features/catalog/types";
 import { formatDate } from "@/lib/format";
+import { pageMetadata } from "@/lib/seo";
+import { courseLessons, getCourseBySlug } from "@/server/catalog/service";
 
 interface CoursePageProps {
   params: Promise<{ slug: string }>;
 }
 
-// Deduplicated per request, so generateMetadata and the page share one API call.
+// Incremental static regeneration: each course page is rendered on its first visit (nothing at build
+// time, so builds don't need the database), served from the cache, and re-rendered at most once a minute.
+export const revalidate = 60;
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
+}
+
+// Read straight from the database (no HTTP hop); deduplicated per render, so generateMetadata and the
+// page share one query.
 const loadCourse = cache(async (slug: string) => {
-  try {
-    return await getCourseBySlug(slug, { next: { revalidate: 60 } });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) notFound();
-    throw error;
-  }
+  const course = await getCourseBySlug(slug);
+  if (!course) notFound();
+  return course;
 });
 
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
   const { slug } = await params;
   const course = await loadCourse(slug);
-  return { title: course.title, description: course.summary };
+  return pageMetadata({
+    title: `${course.title} (Grade ${course.grade_level} ${course.subject.name})`,
+    description: course.summary,
+    path: `/courses/${course.slug}`,
+    ownImage: true,
+  });
+}
+
+/** schema.org Course: what search engines show about a course. */
+function courseJsonLd(course: Course) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Course",
+    "@id": absoluteUrl(`/courses/${course.slug}`),
+    url: absoluteUrl(`/courses/${course.slug}`),
+    name: course.title,
+    description: course.summary,
+    inLanguage: "en",
+    educationalLevel: `Grade ${course.grade_level}`,
+    about: { "@type": "Thing", name: course.subject.name },
+    provider: { "@type": "EducationalOrganization", name: siteConfig.name, url: absoluteUrl("/") },
+    ...(course.published_at ? { datePublished: course.published_at } : {}),
+    dateModified: course.updated_at,
+  };
 }
 
 export default async function CoursePage({ params }: CoursePageProps) {
   const { slug } = await params;
   const course = await loadCourse(slug);
+  const lessons = await courseLessons(course.id);
+  const minutes = totalMinutes(lessons);
 
   return (
     <article className={layout.page}>
+      <JsonLd data={courseJsonLd(course)} />
       <Breadcrumb
         className={layout.breadcrumb}
         items={[
@@ -49,9 +84,12 @@ export default async function CoursePage({ params }: CoursePageProps) {
           <GradeMark grade={course.grade_level} className={layout.gradeMark} />
           <h1 className={layout.title}>{course.title}</h1>
           <p className={layout.summary}>{course.summary}</p>
-          <div className="mt-8 max-w-2xl whitespace-pre-line">
-            {course.description ?? "The full course outline has not been published yet."}
-          </div>
+          {course.description && <div className="mt-8 max-w-2xl whitespace-pre-line">{course.description}</div>}
+          {lessons.length > 0 ? (
+            <CourseOutline lessons={lessons} />
+          ) : (
+            !course.description && <p className="mt-8 max-w-2xl">The full course outline has not been published yet.</p>
+          )}
         </div>
 
         <Card asChild className={layout.aside}>
@@ -65,6 +103,14 @@ export default async function CoursePage({ params }: CoursePageProps) {
                 <dt className="font-bold text-fg-muted">Grade</dt>
                 <dd className="mt-0.5 text-body font-extrabold">{course.grade_level}</dd>
               </div>
+              {lessons.length > 0 && (
+                <div>
+                  <dt className="font-bold text-fg-muted">Length</dt>
+                  <dd className="mt-0.5 text-body font-extrabold">
+                    {lessons.length} lessons{minutes > 0 && `, about ${minutes} min`}
+                  </dd>
+                </div>
+              )}
               {course.published_at && (
                 <div>
                   <dt className="font-bold text-fg-muted">Published</dt>
