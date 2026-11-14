@@ -69,6 +69,14 @@ export const privacySections: LegalSection[] = [
           <li>Their name (a first name is enough) and grade, entered by a parent or school.</li>
           <li>A username, and a password or a picture password (three pictures in order), stored scrambled.</li>
           <li>Which parents are linked to them, which classes they are in, and when a parent gave consent.</li>
+          <li>
+            Their learning: the courses they start, which lessons they opened and finished, the time spent in lessons
+            (counted only while the lesson is on screen), where they stopped each video, which quick-check questions come back for review and when, the notes they write in lessons and
+            the lessons and video moments they bookmark, the badges they earned and their
+            certificates of completion (with their name as it was when the certificate was made). For streaks and minutes we
+            keep one total per day, not a record of every click. Certificates are only ever shown to the student: there is no
+            public page with a child&apos;s name.
+          </li>
           <li>We don&apos;t ask children for an email address, phone number, photo, address or school name.</li>
         </ul>
         <h3>From everyone who uses Lumina</h3>
@@ -95,6 +103,16 @@ export const privacySections: LegalSection[] = [
       <>
         <ul>
           <li>To create and run accounts, sign people in, and show the right courses and reading level.</li>
+          <li>To show students their own progress: what to continue, their streak, points, badges and certificates.</li>
+          <li>To bring back questions from finished lessons at the right time (review), and suggest which course to take next.</li>
+          <li>
+            To keep a student&apos;s notes and bookmarks for them. Teachers and other students never see them; a parent who downloads a
+            copy of their child&apos;s data gets them too, like everything else we hold about the child.
+          </li>
+          <li>
+            To show a verified teacher how each pupil in their class is doing on the work the teacher set (not done, started, done). Teachers
+            see nothing else of a pupil&apos;s learning.
+          </li>
           <li>To let parents manage their children&apos;s accounts, and admins verify teachers.</li>
           <li>To keep accounts secure: spotting repeated wrong passwords, ending sessions, checking who made important changes.</li>
           <li>
@@ -146,10 +164,11 @@ export const privacySections: LegalSection[] = [
           <li>Children can&apos;t delete their own account, so an account isn&apos;t lost by accident: a parent or the school can ask us to.</li>
         </ul>
         <p>
-          Parents and guardians can see their children&apos;s accounts and change how they sign in under{" "}
-          <em>My children</em>. To review the information we hold about your child, correct or delete it, download a copy, or
-          stop us collecting more, email <EmailLink email={contacts.privacy} />. We answer within{" "}
-          {legalConfig.responseTimes.privacyRequestDays} days and first check that you are the child&apos;s parent or guardian.
+          Parents and guardians manage their children&apos;s accounts under <em>My children</em>: see each account, change how
+          it signs in, download a copy of the information we hold about the child, and delete the child&apos;s account (which
+          deletes it straight away). To correct information, or to stop us collecting more without deleting the account, email{" "}
+          <EmailLink email={contacts.privacy} />. We answer within {legalConfig.responseTimes.privacyRequestDays} days and
+          first check that you are the child&apos;s parent or guardian.
         </p>
       </>
     ),
@@ -189,6 +208,8 @@ export const privacySections: LegalSection[] = [
           columns={["Information", "Kept for"]}
           rows={[
             ["Your account and its details", "Until you delete the account (or ask us to), then deleted straight away"],
+            ["A child's learning progress", "Until the child's account is deleted, then deleted with it"],
+            ["Receipts of progress reports (so a report sent twice counts once)", "7 days"],
             ["Sign-in on a device", `Ends after ${d(SESSION_SECONDS)} without use, ${d(CLASSROOM_SESSION_SECONDS)} after a class-code sign-in, or when you sign out`],
             ["Email links (confirm, reset, change)", `${d(TOKEN_SECONDS.password_reset)} to ${d(TOKEN_SECONDS.email_verification)}, then they stop working (removed a day or so later)`],
             ["Parent link codes", `${d(TOKEN_SECONDS.parent_link)}, or until used`],

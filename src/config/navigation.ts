@@ -10,6 +10,8 @@ import {
   MessageSquare,
   School,
   Shield,
+  Repeat,
+  Route,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -23,6 +25,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** False until the page exists: such items are not shown, so nobody lands on a missing page. */
   ready?: boolean;
+  /** Other paths that belong to this item (it is highlighted there too), e.g. sibling pages behind tabs. */
+  match?: string[];
 }
 
 export interface RoleNavigation {
@@ -43,10 +47,11 @@ export const appNavigation: Record<AppRole, RoleNavigation> = {
     tone: "accent",
     items: [
       { label: "Home", href: "/learn", icon: House },
-      { ready: false, label: "My courses", href: "/learn/courses", icon: BookOpen },
-      { ready: false, label: "Assignments", href: "/learn/assignments", icon: ClipboardList },
-      { ready: false, label: "My progress", href: "/learn/progress", icon: ChartLine },
-      { ready: false, label: "Badges", href: "/learn/badges", icon: Award },
+      { label: "My courses", href: "/learn/courses", icon: BookOpen, match: ["/learn/notes"] },
+      { label: "Learning path", href: "/learn/path", icon: Route },
+      { label: "Assignments", href: "/learn/assignments", icon: ClipboardList },
+      { label: "Review", href: "/learn/review", icon: Repeat },
+      { label: "Achievements", href: "/learn/badges", icon: Award, match: ["/learn/certificates"] },
     ],
   },
   teacher: {
@@ -76,6 +81,7 @@ export const appNavigation: Record<AppRole, RoleNavigation> = {
     items: [
       { label: "Overview", href: "/admin", icon: House },
       { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Course prices", href: "/admin/courses", icon: BookOpen },
       { ready: false, label: "Schools", href: "/admin/schools", icon: School },
       { ready: false, label: "Moderation", href: "/admin/moderation", icon: Shield },
       { ready: false, label: "Audit log", href: "/admin/audit-log", icon: FileText },

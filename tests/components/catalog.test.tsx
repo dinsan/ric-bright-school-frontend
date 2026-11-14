@@ -87,7 +87,7 @@ describe("CoursesBrowser", () => {
 describe("accessible names", () => {
   it("R: grade tiles are named 'Grade 4' (not 'Grade4'), course cards include grade and subject", async () => {
     renderWithProviders(<GradePicker />);
-    expect(screen.getByRole("link", { name: "Grade 4" })).toHaveAttribute("href", "/courses?grade=4");
+    expect(screen.getByRole("link", { name: "Grade 4" })).toHaveAttribute("href", "/grades/4");
     expect(screen.getByRole("link", { name: "Grade 12" })).toBeInTheDocument();
     mockApi({ "GET /api/subjects": subjects, "GET /api/courses": () => Response.json(page([course()])) });
     renderWithProviders(<CoursesBrowser />);

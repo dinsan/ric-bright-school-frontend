@@ -49,6 +49,14 @@ enum SessionKind {
   @@map("session_kind")
 }
 
+/// A lesson a student has opened (started) or finished (completed). Completed never goes back.
+enum LessonProgressStatus {
+  started
+  completed
+
+  @@map("lesson_progress_status")
+}
+
 enum TokenPurpose {
   email_verification
   password_reset
@@ -103,20 +111,30 @@ model User {
   createdBy     User?  @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "users_created_by_id_users_id_fk")
   createdUsers  User[] @relation("CreatedBy")
 
-  teacherProfile   TeacherProfile?  @relation("TeacherProfileOwner")
-  verifiedProfiles TeacherProfile[] @relation("TeacherProfileVerifier")
-  guardianOf       Guardianship[]   @relation("GuardianshipParent")
-  guardedBy        Guardianship[]   @relation("GuardianshipChild")
-  sessions         Session[]        @relation("SessionUser")
-  impersonations   Session[]        @relation("SessionImpersonator")
+  teacherProfile   TeacherProfile?   @relation("TeacherProfileOwner")
+  verifiedProfiles TeacherProfile[]  @relation("TeacherProfileVerifier")
+  guardianOf       Guardianship[]    @relation("GuardianshipParent")
+  guardedBy        Guardianship[]    @relation("GuardianshipChild")
+  sessions         Session[]         @relation("SessionUser")
+  impersonations   Session[]         @relation("SessionImpersonator")
   authTokens       AuthToken[]
   recoveryCodes    RecoveryCode[]
   oauthAccounts    OAuthAccount[]
   classesTaught    Class[]
   classMemberships ClassMember[]
   coursesCreated   Course[]
-  auditActions     AuditEvent[]     @relation("AuditActor")
-  auditTargets     AuditEvent[]     @relation("AuditTarget")
+  auditActions     AuditEvent[]      @relation("AuditActor")
+  auditTargets     AuditEvent[]      @relation("AuditTarget")
+  enrollments      Enrollment[]
+  lessonProgress   LessonProgress[]
+  learningDays     LearningDay[]
+  progressReceipts ProgressReceipt[]
+  badges           StudentBadge[]
+  certificates     Certificate[]
+  reviewItems      ReviewItem[]
+  assignmentsSet   Assignment[]      @relation("AssignmentTeacher")
+  lessonNotes      LessonNote[]
+  lessonBookmarks  LessonBookmark[]
 
   @@index([role], map: "users_role_idx")
   @@index([createdAt], map: "users_created_at_idx")
@@ -243,8 +261,9 @@ model Class {
   code      String   @unique(map: "classes_code_key") @db.VarChar(12)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  teacher User          @relation(fields: [teacherId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "classes_teacher_id_users_id_fk")
-  members ClassMember[]
+  teacher     User          @relation(fields: [teacherId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "classes_teacher_id_users_id_fk")
+  members     ClassMember[]
+  assignments Assignment[]
 
   @@index([teacherId], map: "classes_teacher_idx")
   @@map("classes")
@@ -284,6 +303,9 @@ model Course {
   summary      String                   @db.VarChar(400)
   description  String?
   gradeLevel   Int                      @map("grade_level") @db.SmallInt
+  /// What the course costs, in cents (0 = free). One price per course; admins set it (/admin/courses).
+  /// The currency is site-wide (COURSE_CURRENCY). CHECK (price_cents >= 0) lives in migration SQL.
+  priceCents   Int                      @default(0) @map("price_cents")
   status       CourseStatus             @default(draft)
   publishedAt  DateTime?                @map("published_at") @db.Timestamptz(6)
   subjectId    String                   @map("subject_id") @db.Uuid
@@ -296,9 +318,14 @@ model Course {
   /// column is computed, so migrations leave it alone. Keep it in sync with the migration SQL.
   searchVector Unsupported("tsvector")? @default(dbgenerated("((setweight((to_tsvector('english'::regconfig, (COALESCE(title, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text)), 'A'::\"char\") || setweight((to_tsvector('english'::regconfig, (COALESCE(summary, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(summary, ''::character varying))::text)), 'B'::\"char\")) || setweight((to_tsvector('english'::regconfig, COALESCE(description, ''::text)) || to_tsvector('simple'::regconfig, COALESCE(description, ''::text))), 'C'::\"char\"))")) @map("search_vector")
 
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "courses_subject_id_subjects_id_fk")
-  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "courses_created_by_id_users_id_fk")
-  lessons   Lesson[]
+  subject       Subject              @relation(fields: [subjectId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "courses_subject_id_subjects_id_fk")
+  createdBy     User?                @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "courses_created_by_id_users_id_fk")
+  lessons       Lesson[]
+  enrollments   Enrollment[]
+  certificates  Certificate[]
+  assignments   Assignment[]
+  prerequisites CoursePrerequisite[] @relation("CoursePrerequisiteOf")
+  requiredBy    CoursePrerequisite[] @relation("CoursePrerequisiteRequired")
 
   @@index([status, gradeLevel], map: "courses_status_grade_idx")
   @@index([subjectId], map: "courses_subject_idx")
@@ -321,18 +348,259 @@ model Lesson {
   /// 1, 2, 3… within the course.
   position        Int                      @db.SmallInt
   durationMinutes Int?                     @map("duration_minutes") @db.SmallInt
+  /// The lesson itself: an ordered list of content blocks (text, image, video, file, embed, check, callout).
+  /// Shape and validation: src/features/learn/blocks.ts (zod); invalid blocks are dropped when read.
+  content         Json                     @default("[]") @db.JsonB
   createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   /// Generated by PostgreSQL from title (A) and summary (B). Defined in migration SQL; read-only.
   searchVector    Unsupported("tsvector")? @default(dbgenerated("(setweight((to_tsvector('english'::regconfig, (COALESCE(title, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text)), 'A'::\"char\") || setweight((to_tsvector('english'::regconfig, (COALESCE(summary, ''::character varying))::text) || to_tsvector('simple'::regconfig, (COALESCE(summary, ''::character varying))::text)), 'B'::\"char\"))")) @map("search_vector")
 
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lessons_course_id_courses_id_fk")
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lessons_course_id_courses_id_fk")
+  progress    LessonProgress[]
+  assignments Assignment[]
+  reviewItems ReviewItem[]
+  notes       LessonNote[]
+  bookmarks   LessonBookmark[]
 
   @@unique([courseId, slug], map: "lessons_course_slug_key")
   @@index([courseId, position], map: "lessons_course_position_idx")
   @@index([searchVector], map: "lessons_search_idx", type: Gin)
   @@index([title(ops: raw("gin_trgm_ops"))], map: "lessons_title_trgm_idx", type: Gin)
   @@map("lessons")
+}
+
+// --- Learning (student experience, Phase 5) ---------------------------------------------------------
+
+/**
+ * A student taking a course ("My courses"). Unenrolling deletes the row but keeps lesson progress.
+ */
+model Enrollment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String    @map("student_id") @db.Uuid
+  courseId       String    @map("course_id") @db.Uuid
+  enrolledAt     DateTime  @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  /// Set when every lesson of the course is completed.
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
+  /// Where "Continue" takes the student: the last lesson they opened.
+  lastLessonId   String?   @map("last_lesson_id") @db.Uuid
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "enrollments_student_id_users_id_fk")
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "enrollments_course_id_courses_id_fk")
+
+  @@unique([studentId, courseId], map: "enrollments_student_course_key")
+  @@index([studentId, lastActivityAt], map: "enrollments_student_activity_idx")
+  @@index([courseId], map: "enrollments_course_idx")
+  @@map("enrollments")
+}
+
+/**
+ * One row per student and lesson: opened (started) or finished (completed), and time spent.
+ */
+model LessonProgress {
+  studentId      String               @map("student_id") @db.Uuid
+  lessonId       String               @map("lesson_id") @db.Uuid
+  status         LessonProgressStatus @default(started)
+  /// Seconds spent in the lesson, summed from the player's reports (capped per report).
+  secondsSpent   Int                  @default(0) @map("seconds_spent")
+  startedAt      DateTime             @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt    DateTime?            @map("completed_at") @db.Timestamptz(6)
+  /// Where each video of the lesson was left, in seconds: { "<block id>": 42 }. "Remembers position".
+  mediaPositions Json                 @default("{}") @map("media_positions") @db.JsonB
+  updatedAt      DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_progress_student_id_users_id_fk")
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_progress_lesson_id_lessons_id_fk")
+
+  @@id([studentId, lessonId], map: "lesson_progress_student_id_lesson_id_pk")
+  @@index([lessonId], map: "lesson_progress_lesson_idx")
+  @@map("lesson_progress")
+}
+
+/**
+ * Learning activity per student and day (in the student's time zone): the basis for streaks and
+ * "minutes this week". Aggregated per day on purpose: no event stream about children is kept.
+ */
+model LearningDay {
+  studentId        String   @map("student_id") @db.Uuid
+  /// The calendar day in the student's time zone.
+  day              DateTime @db.Date
+  secondsSpent     Int      @default(0) @map("seconds_spent")
+  lessonsCompleted Int      @default(0) @map("lessons_completed")
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "learning_days_student_id_users_id_fk")
+
+  @@id([studentId, day], map: "learning_days_student_id_day_pk")
+  @@map("learning_days")
+}
+
+/**
+ * Progress reports already applied, by the id the browser gave them: a report retried after a lost
+ * answer (offline queue, FE-STU-05) is recognised and not applied twice. Kept 7 days.
+ */
+model ProgressReceipt {
+  studentId  String   @map("student_id") @db.Uuid
+  reportId   String   @map("report_id") @db.Uuid
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "progress_receipts_student_id_users_id_fk")
+
+  @@id([studentId, reportId], map: "progress_receipts_student_id_report_id_pk")
+  @@index([receivedAt], map: "progress_receipts_received_at_idx")
+  @@map("progress_receipts")
+}
+
+/**
+ * Badges a student has earned. The badges themselves are defined in code (src/features/learn/badges.ts).
+ */
+model StudentBadge {
+  studentId String   @map("student_id") @db.Uuid
+  badge     String   @db.VarChar(40)
+  earnedAt  DateTime @default(now()) @map("earned_at") @db.Timestamptz(6)
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "student_badges_student_id_users_id_fk")
+
+  @@id([studentId, badge], map: "student_badges_student_id_badge_pk")
+  @@map("student_badges")
+}
+
+/**
+ * A certificate of completion, issued when a student finishes every lesson of a course. The names are
+ * copied at issue time, so the certificate reads the same later (a renamed course, a deleted course).
+ */
+model Certificate {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  courseId     String?  @map("course_id") @db.Uuid
+  /// Printed on the certificate, e.g. "LUM-7K2Q-9XHD". Unique.
+  code         String   @unique(map: "certificates_code_key") @db.VarChar(20)
+  studentName  String   @map("student_name") @db.VarChar(80)
+  courseTitle  String   @map("course_title") @db.VarChar(160)
+  subjectName  String   @map("subject_name") @db.VarChar(80)
+  gradeLevel   Int      @map("grade_level") @db.SmallInt
+  lessonsCount Int      @map("lessons_count") @db.SmallInt
+  issuedAt     DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+
+  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "certificates_student_id_users_id_fk")
+  course  Course? @relation(fields: [courseId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "certificates_course_id_courses_id_fk")
+
+  @@unique([studentId, courseId], map: "certificates_student_course_key")
+  @@index([studentId, issuedAt], map: "certificates_student_issued_idx")
+  @@map("certificates")
+}
+
+/**
+ * Learning paths (BE-CAT-08): a course that builds on another. A course is locked for a student while a
+ * prerequisite at or above the student's own grade isn't finished (src/features/learn/path.ts).
+ */
+model CoursePrerequisite {
+  courseId         String @map("course_id") @db.Uuid
+  requiresCourseId String @map("requires_course_id") @db.Uuid
+
+  course   Course @relation("CoursePrerequisiteOf", fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "course_prerequisites_course_id_courses_id_fk")
+  requires Course @relation("CoursePrerequisiteRequired", fields: [requiresCourseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "course_prerequisites_requires_course_id_courses_id_fk")
+
+  @@id([courseId, requiresCourseId], map: "course_prerequisites_course_id_requires_course_id_pk")
+  @@index([requiresCourseId], map: "course_prerequisites_requires_idx")
+  @@map("course_prerequisites")
+}
+
+/**
+ * Work a teacher sets for a class (BE-SCH-03): a whole course, or one lesson of it, by a due date.
+ * Whether a student has done it comes from their lesson progress; nothing is stored per student here.
+ */
+model Assignment {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classId      String   @map("class_id") @db.Uuid
+  teacherId    String   @map("teacher_id") @db.Uuid
+  courseId     String   @map("course_id") @db.Uuid
+  /// One lesson of the course; null means the whole course.
+  lessonId     String?  @map("lesson_id") @db.Uuid
+  title        String   @db.VarChar(160)
+  instructions String?  @db.VarChar(1000)
+  dueAt        DateTime @map("due_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assignments_class_id_classes_id_fk")
+  teacher User    @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assignments_teacher_id_users_id_fk")
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assignments_course_id_courses_id_fk")
+  lesson  Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assignments_lesson_id_lessons_id_fk")
+
+  @@index([classId, dueAt], map: "assignments_class_due_idx")
+  @@map("assignments")
+}
+
+/**
+ * Spaced review (BE-LRN-08): one quick-check question of a finished lesson, scheduled for the student to
+ * see again. Right answers push the next review further away (1, 3, 7, 14, 30, 60, 120 days), a wrong one
+ * brings it back tomorrow (src/features/learn/spaced.ts).
+ */
+model ReviewItem {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String    @map("student_id") @db.Uuid
+  lessonId       String    @map("lesson_id") @db.Uuid
+  /// The `check` block in the lesson's content.
+  blockId        String    @map("block_id") @db.VarChar(40)
+  /// Leitner box: 0 = new or just missed, 6 = well known.
+  box            Int       @default(0) @db.SmallInt
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  dueAt          DateTime  @map("due_at") @db.Timestamptz(6)
+  lastReviewedAt DateTime? @map("last_reviewed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "review_items_student_id_users_id_fk")
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "review_items_lesson_id_lessons_id_fk")
+
+  @@unique([studentId, lessonId, blockId], map: "review_items_student_lesson_block_key")
+  @@index([studentId, dueAt], map: "review_items_student_due_idx")
+  @@map("review_items")
+}
+
+/**
+ * A student's own note on a lesson (FE-STU-06, BE-LRN-04), about the whole lesson or one block of it.
+ * Private: teachers and other students never see it (a parent's data copy includes it). Plain text, shown as text.
+ */
+model LessonNote {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  /// The block the note is about; null for the whole lesson.
+  blockId   String?  @map("block_id") @db.VarChar(40)
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_notes_student_id_users_id_fk")
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_notes_lesson_id_lessons_id_fk")
+
+  @@index([studentId, updatedAt], map: "lesson_notes_student_updated_idx")
+  @@index([studentId, lessonId], map: "lesson_notes_student_lesson_idx")
+  @@map("lesson_notes")
+}
+
+/**
+ * A bookmark inside a lesson (FE-STU-06): the lesson itself, one block of it, or a moment in a video.
+ * `anchor` says which ("lesson", "block:intro", "video:video@42") and makes each one unique per student.
+ */
+model LessonBookmark {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  lessonId     String   @map("lesson_id") @db.Uuid
+  anchor       String   @db.VarChar(80)
+  blockId      String?  @map("block_id") @db.VarChar(40)
+  /// A moment in a video block, in whole seconds.
+  mediaSeconds Int?     @map("media_seconds")
+  label        String?  @db.VarChar(120)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_bookmarks_student_id_users_id_fk")
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lesson_bookmarks_lesson_id_lessons_id_fk")
+
+  @@unique([studentId, lessonId, anchor], map: "lesson_bookmarks_student_lesson_anchor_key")
+  @@index([studentId, createdAt], map: "lesson_bookmarks_student_created_idx")
+  @@map("lesson_bookmarks")
 }
 
 // --- Operations --------------------------------------------------------------------------------------

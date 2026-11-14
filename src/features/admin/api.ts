@@ -1,9 +1,17 @@
 import { apiFetch } from "@/lib/api-client";
 import { paths, type AdminUser, type AdminUserUpdate, type Me, type Role, type UserPage } from "@/features/auth/contract";
+import type { AdminCourse, CourseStatus, Page } from "@/features/catalog/types";
 
 export interface UserSearch {
   q?: string;
   role?: Role;
+  limit: number;
+  offset: number;
+}
+
+export interface CourseSearch {
+  q?: string;
+  status?: CourseStatus;
   limit: number;
   offset: number;
 }
@@ -17,4 +25,8 @@ export const adminApi = {
     apiFetch<AdminUser>(paths.adminTeacherVerification(id), { method: "PUT", json: { verified } }),
   resetMfa: (id: string) => apiFetch<void>(paths.adminMfa(id), { method: "DELETE" }),
   impersonate: (id: string) => apiFetch<{ signed_in: true; user: Me | null }>(paths.adminImpersonate(id), { method: "POST", json: {} }),
+  courses: ({ q, status, limit, offset }: CourseSearch) =>
+    apiFetch<Page<AdminCourse>>(paths.adminCourses, { searchParams: { q, status, limit, offset } }),
+  setCoursePrice: (id: string, priceCents: number) =>
+    apiFetch<AdminCourse>(paths.adminCourse(id), { method: "PATCH", json: { price_cents: priceCents } }),
 };

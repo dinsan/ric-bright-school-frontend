@@ -45,7 +45,7 @@ export async function createCatalog() {
   const science = await getDb().subject.create({ data: { slug: "science", name: "Science" } });
   const created = await getDb().course.createManyAndReturn({
     data: [
-      { slug: "fractions", title: "Fractions Made Simple", summary: "Halves, quarters and more.", gradeLevel: 4, subjectId: maths.id, status: "published", publishedAt: new Date() },
+      { slug: "fractions", title: "Fractions Made Simple", summary: "Halves, quarters and more.", gradeLevel: 4, subjectId: maths.id, status: "published", publishedAt: new Date(), priceCents: 1250 },
       { slug: "counting", title: "Counting to 100", summary: "Numbers 1 to 100.", gradeLevel: 1, subjectId: maths.id, status: "published", publishedAt: new Date() },
       { slug: "plants", title: "Plants and How They Grow", summary: "Seeds and roots (100% fun).", gradeLevel: 4, subjectId: science.id, status: "published", publishedAt: new Date() },
       { slug: "secret-draft", title: "Secret Draft", summary: "Not ready.", gradeLevel: 4, subjectId: maths.id, status: "draft" },

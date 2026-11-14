@@ -14,7 +14,7 @@ export function SiteHeader() {
           <nav aria-label="Main">
             <ul className="flex items-center gap-6 text-small font-bold">
               {siteConfig.nav.map((item) => (
-                <li key={item.href}>
+                <li key={item.href} className={"desktopOnly" in item && item.desktopOnly ? "hidden sm:list-item" : undefined}>
                   <Link href={item.href} className="underline-offset-4 hover:underline">
                     {item.label}
                   </Link>

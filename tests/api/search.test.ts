@@ -5,8 +5,13 @@ import type { SearchResults } from "@/features/search/types";
 import { Browser } from "../support/browser";
 import { createCatalog } from "../support/factories";
 
-const find = async (q: string, limit?: number) => {
-  const query = new URLSearchParams({ q, ...(limit ? { limit: String(limit) } : {}) });
+const find = async (q: string, limit?: number, filters: { grade?: number; subject?: string } = {}) => {
+  const query = new URLSearchParams({
+    q,
+    ...(limit ? { limit: String(limit) } : {}),
+    ...(filters.grade ? { grade: String(filters.grade) } : {}),
+    ...(filters.subject ? { subject: filters.subject } : {}),
+  });
   return new Browser().call<SearchResults>(search, { path: `/api/search?${query}` });
 };
 const titles = (hits: Array<{ title: string }>) => hits.map((hit) => hit.title);
@@ -48,6 +53,38 @@ describe("global search", () => {
     expect(typo.body.approximate).toBe(true);
     expect(titles(typo.body.courses)).toEqual(["Fractions Made Simple"]);
     expect(titles((await find("plnts")).body.courses)).toContain("Plants and How They Grow");
+  });
+
+  it("offers the corrected words when only close matches were found (FE-PUB-12)", async () => {
+    await createCatalog();
+    const typo = await find("fracton");
+    expect(typo.body.suggestion).toBe("fraction"); // the closest word in the titles that were found
+    // Exact results never carry a suggestion.
+    expect((await find("fractions")).body.suggestion).toBeNull();
+  });
+
+  it("matches the other spellings of school words, both ways (FE-PUB-12)", async () => {
+    await createCatalog(); // the "Mathematics" subject name is indexed with the courses
+    const british = await find("maths");
+    expect(british.body.approximate).toBe(false);
+    expect(titles(british.body.courses)).toContain("Fractions Made Simple");
+    expect(titles(british.body.courses)).toEqual(titles((await find("math")).body.courses));
+  });
+
+  it("filters by an explicit grade and subject from the /search page (FE-PUB-12)", async () => {
+    await createCatalog();
+    const maths = await find("", undefined, { subject: "mathematics" });
+    expect(titles(maths.body.courses)).toEqual(["Counting to 100", "Fractions Made Simple"]);
+    const grade4Maths = await find("", undefined, { grade: 4, subject: "mathematics" });
+    expect(titles(grade4Maths.body.courses)).toEqual(["Fractions Made Simple"]);
+    const science = await find("plants", undefined, { subject: "science" });
+    expect(titles(science.body.courses)).toEqual(["Plants and How They Grow"]);
+    expect(titles((await find("plants", undefined, { subject: "mathematics" })).body.courses)).toEqual([]);
+    // The explicit grade wins over one typed in the query.
+    const explicit = await find("grade 1 fractions", undefined, { grade: 4 });
+    expect(explicit.body.grade).toBe(4);
+    expect(titles(explicit.body.courses)).toEqual(["Fractions Made Simple"]);
+    expect((await find("x", undefined, { grade: 13 })).status).toBe(422);
   });
 
   it("doesn't mix look-alike titles into exact results (fraction ≠ subtraction)", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightParts, isSearchable, parseSearchQuery } from "@/features/search/query";
+import { didYouMean, highlightParts, isSearchable, parseSearchQuery, synonymsFor, trigramSimilarity } from "@/features/search/query";
 
 describe("parseSearchQuery", () => {
   it("keeps lower-case words of letters and digits, dropping punctuation", () => {
@@ -63,5 +63,38 @@ describe("highlightParts", () => {
 
   it("treats regular-expression characters in terms as plain text", () => {
     expect(() => highlightParts("C++ (advanced)", ["c++", "(adv"])).not.toThrow();
+  });
+});
+
+describe("synonyms (FE-PUB-12)", () => {
+  it("knows the other spellings of school words, both ways", () => {
+    expect(synonymsFor("maths")).toEqual(expect.arrayContaining(["math", "mathematics"]));
+    expect(synonymsFor("math")).toContain("maths");
+    expect(synonymsFor("colour")).toEqual(["color"]);
+    expect(synonymsFor("color")).toEqual(["colour"]);
+  });
+
+  it("returns nothing for ordinary words", () => {
+    expect(synonymsFor("fractions")).toEqual([]);
+    expect(synonymsFor("")).toEqual([]);
+  });
+});
+
+describe("did you mean (FE-PUB-12)", () => {
+  it("measures word similarity like pg_trgm", () => {
+    expect(trigramSimilarity("python", "python")).toBe(1);
+    expect(trigramSimilarity("fracton", "fraction")).toBeGreaterThan(0.4);
+    expect(trigramSimilarity("python", "history")).toBeLessThan(0.2);
+  });
+
+  it("suggests the corrected words from the titles that were found", () => {
+    const parsed = parseSearchQuery("fracton");
+    expect(didYouMean(parsed, ["Fractions Made Simple"])).toBe("fractions");
+  });
+
+  it("suggests nothing when the words already match or nothing is close", () => {
+    expect(didYouMean(parseSearchQuery("fractions"), ["Fractions Made Simple"])).toBeNull();
+    expect(didYouMean(parseSearchQuery("zzz"), ["Fractions Made Simple"])).toBeNull();
+    expect(didYouMean(parseSearchQuery("fracton"), [])).toBeNull();
   });
 });

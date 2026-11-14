@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { escapeLike, isDatabaseUnavailable, isUniqueViolation, pgErrorCode } from "@/server/db";
+import { escapeLike, isDatabaseUnavailable, isUniqueViolation, pgErrorCode, shouldReplaceClient } from "@/server/db";
 import { fieldError, HttpError, tooManyRequests } from "@/server/http/errors";
 import { clientIp, isSecureRequest, publicOrigin } from "@/server/http/request";
 import { json, route } from "@/server/http/route";
@@ -182,5 +182,21 @@ describe("proxy headers", () => {
     process.env.COOKIE_SECURE = "true";
     resetServerConfig();
     expect(isSecureRequest(request({}))).toBe(true);
+  });
+});
+
+// R: a production build has several copies of the generated PrismaClient class (one per server bundle).
+// Replacing the shared client whenever the class "changed" made concurrent page renders and API requests
+// disconnect each other's client, killing interactive transactions (P2028). Only `next dev` swaps it.
+describe("database client sharing", () => {
+  class CopyA {}
+  class CopyB {}
+  it("never replaces the shared client in production or tests, whichever bundle asks", () => {
+    expect(shouldReplaceClient(CopyA, CopyB, "production")).toBe(false);
+    expect(shouldReplaceClient(CopyA, CopyB, "test")).toBe(false);
+  });
+  it("switches to a regenerated client while developing", () => {
+    expect(shouldReplaceClient(CopyA, CopyB, "development")).toBe(true);
+    expect(shouldReplaceClient(CopyA, CopyA, "development")).toBe(false);
   });
 });

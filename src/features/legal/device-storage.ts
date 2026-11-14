@@ -83,4 +83,17 @@ export const localStorageItems: StoredItem[] = [
     purpose: "Only when \"This is a classroom device\" is ticked at class sign-in: the class code, so children on a shared device start at \"Who are you?\".",
     duration: "Until someone chooses \"Change the class code\", or the browser's data is cleared",
   },
+  {
+    name: STORAGE_KEYS.progressQueue,
+    kind: "Local storage",
+    purpose:
+      "Students only: lesson progress (which lesson, done or not, minutes, where a video stopped) that hasn't reached our server yet, for example while offline. Kept per student, so on a shared device it is only ever sent for the student it belongs to.",
+    duration: "Until it reaches our server, usually a second or two",
+  },
+  {
+    name: STORAGE_KEYS.celebrations,
+    kind: "Local storage",
+    purpose: "Students only: whether to show celebrations (a short animation when you finish a lesson or earn a badge).",
+    duration: "Until you change it or clear your browser's data",
+  },
 ];

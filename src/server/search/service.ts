@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { isSearchable, parseSearchQuery, type ParsedQuery } from "@/features/search/query";
+import { didYouMean, isSearchable, parseSearchQuery, synonymsFor, type ParsedQuery } from "@/features/search/query";
 import { SEARCH_MAX_LENGTH, type SearchHit, type SearchResults } from "@/features/search/types";
 import { getDb } from "@/server/db";
 
@@ -25,6 +25,9 @@ import { getDb } from "@/server/db";
 export const searchInput = z.object({
   q: z.string().trim().max(SEARCH_MAX_LENGTH).default(""),
   limit: z.coerce.number().int().min(1).max(50).default(5),
+  // Explicit filters from the /search page (FE-PUB-12); a grade typed in the query still works.
+  grade: z.coerce.number().int().min(1).max(12).optional(),
+  subject: z.string().trim().max(80).optional(),
 });
 
 /** word_similarity from which a title is a close match (a dropped or doubled letter: "plnts", "calculas"). */
@@ -37,11 +40,14 @@ const empty = (query: string, grade: number | null = null): SearchResults => ({
   lessons: [],
   more: { courses: false, lessons: false },
   approximate: false,
+  suggestion: null,
 });
 
-export async function search({ q, limit }: z.output<typeof searchInput>): Promise<SearchResults> {
+export async function search({ q, limit, grade, subject }: z.output<typeof searchInput>): Promise<SearchResults> {
   const parsed = parseSearchQuery(q);
-  if (!isSearchable(parsed)) return empty(q, parsed.grade);
+  if (grade !== undefined) parsed.grade = grade;
+  if (subject) parsed.subject = subject;
+  if (!isSearchable(parsed) && !parsed.subject) return empty(q, parsed.grade);
   const take = limit + 1;
   let [courseHits, lessonHits] = await Promise.all([searchCourses(parsed, take, "exact"), parsed.terms.length ? searchLessons(parsed, take, "exact") : []]);
   let approximate = false;
@@ -56,13 +62,24 @@ export async function search({ q, limit }: z.output<typeof searchInput>): Promis
     lessons: lessonHits.slice(0, limit),
     more: { courses: courseHits.length > limit, lessons: lessonHits.length > limit },
     approximate,
+    // Close matches only: offer the corrected words ("fracton" → "Did you mean fraction?").
+    suggestion: approximate ? didYouMean(parsed, [...courseHits, ...lessonHits].map((hit) => hit.title)) : null,
   };
 }
 
-/** Every word as a prefix, stemmed or as written, all required: (english 'frac:*' | simple 'frac:*') && … */
+/**
+ * Every word as a prefix, stemmed or as written, all required: (english 'frac:*' | simple 'frac:*') && …
+ * A word with other spellings (maths/math, colour/color) matches any of them (FE-PUB-12).
+ */
 function tsquery(terms: string[]): Prisma.Sql {
   return Prisma.join(
-    terms.map((term) => Prisma.sql`(to_tsquery('english', ${`${term}:*`}) || to_tsquery('simple', ${`${term}:*`}))`),
+    terms.map((term) => {
+      const spellings = [term, ...synonymsFor(term)];
+      return Prisma.sql`(${Prisma.join(
+        spellings.map((word) => Prisma.sql`to_tsquery('english', ${`${word}:*`}) || to_tsquery('simple', ${`${word}:*`})`),
+        " || ",
+      )})`;
+    }),
     " && ",
   );
 }
@@ -84,7 +101,8 @@ interface CourseHitRow {
 async function searchCourses(parsed: ParsedQuery, take: number, mode: Mode): Promise<SearchHit[]> {
   const filters: Prisma.Sql[] = [Prisma.sql`c.status = 'published'`];
   if (parsed.grade !== null) filters.push(Prisma.sql`c.grade_level = ${parsed.grade}`);
-  // Only a grade: that grade's courses by title.
+  if (parsed.subject) filters.push(Prisma.sql`s.slug = ${parsed.subject}`);
+  // Only a grade or a subject: those courses by title.
   let score: Prisma.Sql | null = null;
   if (parsed.terms.length && mode === "exact") {
     const query = Prisma.sql`(${tsquery(parsed.terms)})`;
@@ -129,6 +147,7 @@ interface LessonHitRow {
 async function searchLessons(parsed: ParsedQuery, take: number, mode: Mode): Promise<SearchHit[]> {
   const filters: Prisma.Sql[] = [Prisma.sql`c.status = 'published'`];
   if (parsed.grade !== null) filters.push(Prisma.sql`c.grade_level = ${parsed.grade}`);
+  if (parsed.subject) filters.push(Prisma.sql`s.slug = ${parsed.subject}`);
   let score: Prisma.Sql;
   if (mode === "exact") {
     const query = Prisma.sql`(${tsquery(parsed.terms)})`;

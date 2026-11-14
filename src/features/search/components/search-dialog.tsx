@@ -3,7 +3,7 @@
 import { ArrowRight, BookOpen, CornerDownLeft, FileText, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { DialogOverlay } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/cn";
@@ -47,6 +47,14 @@ export function SearchDialog({
   const activeIndex = Math.max(0, options.findIndex((option) => option.key === activeKey));
   const active = options[activeIndex];
   const optionId = (key: string) => `${ids}-option-${key}`;
+
+  // When the results overflow, the arrows keep the highlighted option in view ("nearest": no jumps).
+  const resultsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!activeKey) return;
+    resultsRef.current?.querySelector(`[id="${CSS.escape(optionId(activeKey))}"]`)?.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- optionId is stable for a given render id
+  }, [activeKey]);
 
   // Leaving for a result: the destination takes focus (a targeted lesson), not the Search button.
   const navigating = useRef(false);
@@ -201,7 +209,19 @@ export function SearchDialog({
             {announcement}
           </p>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {/*
+            The results can overflow on small screens, so the scroll container is itself reachable with
+            the keyboard (tabIndex=0: Tab from the input, then the arrow keys scroll natively), as a named
+            region. The combobox pattern is untouched: focus normally stays in the input and
+            aria-activedescendant points at the highlighted option (FE-PUB-13).
+          */}
+          <div
+            ref={resultsRef}
+            role="region"
+            aria-label="Search results"
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-y-auto p-3 focus-visible:-outline-offset-2"
+          >
             <ul id={`${ids}-listbox`} role="listbox" aria-label="Search results" className={cn("grid gap-4", options.length === 0 && "hidden")}>
               {groups
                 .filter((group) => group.options.length > 0)
@@ -225,7 +245,23 @@ export function SearchDialog({
             </ul>
 
             {data?.approximate && options.length > 0 && (
-              <p className="px-3 pt-3 text-small text-fg-muted">No exact matches, so these are close matches. Check the spelling?</p>
+              <p className="px-3 pt-3 text-small text-fg-muted">
+                No exact matches, so these are close matches. Check the spelling?
+                {data.suggestion && (
+                  <>
+                    {" "}
+                    Did you mean{" "}
+                    <button
+                      type="button"
+                      onClick={() => setInput(data.suggestion!)}
+                      className="font-bold underline underline-offset-4 hover:no-underline"
+                    >
+                      {data.suggestion}
+                    </button>
+                    ?
+                  </>
+                )}
+              </p>
             )}
 
             {!searchable && (

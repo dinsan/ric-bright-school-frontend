@@ -9,4 +9,8 @@ export const STORAGE_KEYS = {
   band: "lumina:band",
   /** On a shared classroom device, the class code, so children start at "Who are you?". */
   classCode: "lumina:class-code",
+  /** Lesson progress not yet confirmed by the server (offline queue), per student on this device. */
+  progressQueue: "lumina:progress-queue",
+  /** Whether the student wants celebrations (animations when finishing lessons, badges, levels). */
+  celebrations: "lumina:celebrations",
 } as const;

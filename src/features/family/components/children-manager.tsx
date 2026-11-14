@@ -1,7 +1,7 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Link2, UserPlus } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Download, KeyRound, Link2, Trash2, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Controller } from "react-hook-form";
 import { z } from "zod";
@@ -26,7 +26,7 @@ import { PASSWORD_MIN, USERNAME_PATTERN, type Child, type PictureKey } from "@/f
 import { GRADES } from "@/features/catalog/constants";
 import { fields } from "@/lib/forms/zod";
 import { messages } from "@/lib/forms/messages";
-import { familyApi } from "../api";
+import { childDataUrl, familyApi } from "../api";
 import { childrenKey, useChildren } from "../hooks";
 import { PicturePicker } from "./picture-picker";
 
@@ -35,7 +35,7 @@ const signInLabels = { password: "Username and password", pictures: "Class code 
 /** Parents: the children on the account, with their sign-in, plus add and link. */
 export function ChildrenManager({ manage = true }: { manage?: boolean }) {
   const children = useChildren();
-  const [dialog, setDialog] = useState<{ kind: "add" } | { kind: "link" } | { kind: "sign-in"; child: Child } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "add" } | { kind: "link" } | { kind: "sign-in"; child: Child } | { kind: "delete"; child: Child } | null>(null);
   const close = () => setDialog(null);
 
   const actions = manage && (
@@ -99,10 +99,21 @@ export function ChildrenManager({ manage = true }: { manage?: boolean }) {
                   )}
                 </div>
                 {manage && (
-                  <CardFooter>
+                  <CardFooter className="flex-wrap gap-2">
                     <Button size="sm" onClick={() => setDialog({ kind: "sign-in", child })}>
                       <KeyRound aria-hidden />
                       {child.sign_in_method ? "Change sign-in" : "Set up sign-in"}
+                    </Button>
+                    {/* A plain link: the server answers with a JSON file to keep (the child's data copy). */}
+                    <Button size="sm" asChild>
+                      <a href={childDataUrl(child.id)} download>
+                        <Download aria-hidden />
+                        Download their data
+                      </a>
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => setDialog({ kind: "delete", child })}>
+                      <Trash2 aria-hidden />
+                      Delete account
                     </Button>
                   </CardFooter>
                 )}
@@ -120,8 +131,56 @@ export function ChildrenManager({ manage = true }: { manage?: boolean }) {
         )}
         {dialog?.kind === "link" && <LinkChild onDone={close} />}
         {dialog?.kind === "sign-in" && <SignInSetup child={dialog.child} onDone={close} />}
+        {dialog?.kind === "delete" && <DeleteChild child={dialog.child} onDone={close} />}
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * Deleting a child's account (FE-PUB-11): explains what goes, offers the data copy first, and asks for
+ * an explicit confirmation. Not reversible, so the confirm button stays off until the box is ticked.
+ */
+function DeleteChild({ child, onDone }: { child: Child; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [confirmed, setConfirmed] = useState(false);
+  const remove = useMutation({
+    mutationFn: () => familyApi.deleteChild(child.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: childrenKey });
+      toast({ title: `${child.display_name}'s account was deleted`, tone: "success" });
+      onDone();
+    },
+    onError: (error) => toast({ title: "The account wasn't deleted", description: error.message, tone: "danger" }),
+  });
+  return (
+    <DialogContent
+      title={`Delete ${child.display_name}'s account?`}
+      description="The account, how they sign in, and their family and class connections are deleted straight away. This can't be undone."
+    >
+      <div className="grid gap-4">
+        <Alert tone="info">
+          Want to keep a copy first?{" "}
+          <a href={childDataUrl(child.id)} download className="font-bold underline underline-offset-4 hover:no-underline">
+            Download their data
+          </a>{" "}
+          before deleting.
+        </Alert>
+        <Checkbox
+          label={`I understand ${child.display_name}'s account will be deleted and can't be brought back`}
+          checked={confirmed}
+          onChange={(event) => setConfirmed(event.target.checked)}
+        />
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button>Cancel</Button>
+          </DialogClose>
+          <Button variant="danger" disabled={!confirmed} loading={remove.isPending} onClick={() => remove.mutate()}>
+            Delete the account
+          </Button>
+        </DialogFooter>
+      </div>
+    </DialogContent>
   );
 }
 

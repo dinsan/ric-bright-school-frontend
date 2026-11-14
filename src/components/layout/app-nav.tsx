@@ -12,11 +12,12 @@ interface AppNavProps {
   onNavigate?: () => void;
 }
 
-function bestMatch(items: NavItem[], pathname: string) {
-  // The longest href that the path starts with, so "/learn/courses" beats "/learn".
+export function bestMatch(items: NavItem[], pathname: string) {
+  // The longest path that matches, so "/learn/courses" beats "/learn". An item also matches its `match` paths.
+  const within = (base: string) => pathname === base || pathname.startsWith(`${base}/`);
   return items
-    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+    .flatMap((item) => [item.href, ...(item.match ?? [])].filter(within).map((path) => ({ href: item.href, length: path.length })))
+    .sort((a, b) => b.length - a.length)[0]?.href;
 }
 
 export function AppNav({ items, activeHref, onNavigate }: AppNavProps) {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { BookOpen, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/server/auth/current-user";
@@ -19,6 +19,15 @@ export default async function AdminHome() {
               <Users aria-hidden className="size-8" />
               <CardTitle as="h2">Users</CardTitle>
               <CardDescription>Find people, change roles, verify teachers, reset two-step verification, view as a user for support.</CardDescription>
+            </Link>
+          </Card>
+        </li>
+        <li>
+          <Card asChild interactive className="h-full">
+            <Link href="/admin/courses">
+              <BookOpen aria-hidden className="size-8" />
+              <CardTitle as="h2">Course prices</CardTitle>
+              <CardDescription>Set what each course costs. Prices show on the public course pages; 0 makes a course free.</CardDescription>
             </Link>
           </Card>
         </li>

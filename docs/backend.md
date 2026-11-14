@@ -29,7 +29,7 @@ Browser ──page request──▶ Server Component / layout ──────
 | `prisma/schema.prisma` | Every table, relation and index (the source of truth for the client and for migrations) |
 | `prisma/migrations/` | SQL migrations, applied in order by `prisma migrate deploy` (commit them) |
 | `prisma.config.ts` | Prisma CLI settings: schema and migrations paths, `DATABASE_URL` (read from the same env files as Next.js) |
-| `src/server/db/index.ts` | `getDb()`: the Prisma Client (created on first use; `next build` never connects), row types, error helpers (`isDatabaseUnavailable`, `isUniqueViolation`), `escapeLike` |
+| `src/server/db/index.ts` | `getDb()`: the Prisma Client (created on first use; `next build` never connects; one per process, shared by every server bundle — only `next dev` swaps it for a regenerated client, see `shouldReplaceClient`), row types, error helpers (`isDatabaseUnavailable`, `isUniqueViolation`), `escapeLike` |
 | `src/generated/prisma/` | The generated Prisma Client (not committed; `npm install` / `npm run db:client` create it) |
 | `src/server/http/` | `route()` wrapper, `HttpError`, `parseBody` / `parseQuery` / `parseId`, CSRF check, client IP, rate limits |
 | `src/server/auth/` | Sessions, cookies, passwords (argon2id), TOTP, one-time tokens, sign-in services |
@@ -100,6 +100,8 @@ import { getDb, isUniqueViolation } from "@/server/db";
 const user = await getDb().user.findUnique({ where: { email } });
 const sessions = await getDb().session.findMany({ where: { userId, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: "desc" } });
 await getDb().$transaction(async (tx) => { /* tx.user…, tx.guardianship… */ });
+// Read-then-write that must not interleave (counting something once): lock the parent row first,
+// e.g. recordLessonProgress locks the enrolment with `select … for update` (src/server/learning/service.ts).
 ```
 
 - **Row types**: `UserRow`, `SessionRow`, `CourseRow`… are re-exported from `@/server/db` (Prisma's model types).
@@ -210,12 +212,28 @@ tests simply recreate their own database. What changed in the move, and how it w
   query API has no tsquery, ranking or trigram operators.
 - Every word of the query is a prefix and all are required (`frac` finds "Fractions"). Subject names count; a
   grade ("grade 4", "4th grade", "g4") is a filter. Lessons also match their course's title, at the lowest weight.
+- School words spelled differently match each other (maths/math/mathematics, colour/color…): a small curated list
+  (`SYNONYM_GROUPS` in `src/features/search/query.ts`) expands each word of the tsquery. Prefix matching already
+  covers stems ("math" → "mathematics"), so the list only holds spellings a prefix can't reach.
+- The /search page can also filter by an explicit grade and subject (`?grade=4&subject=mathematics`); an explicit
+  grade wins over one typed in the query.
 - Typo tolerance (`word_similarity` ≥ 0.4 on titles) runs only when nothing matches exactly, and marks the
   results `approximate`: on its own, trigram similarity also matches unrelated titles ("fraction" ~ "subtraction").
+  Close matches also carry a `suggestion` ("Did you mean fraction?"): each query word replaced by the most similar
+  word from the titles that were found (a pure trigram similarity in `query.ts`, so no extra SQL).
 - Query parsing (`src/features/search/query.ts`) is shared with the browser, which uses it to highlight matches.
   It keeps only letters and digits, so the tsquery built from it can't be malformed.
 - Public and cacheable for a minute. If the catalog grows to tens of thousands of lessons, store the course title
   in the lesson's vector instead of joining it per query.
+
+## Learning (students)
+
+`src/server/learning/service.ts` behind `/api/learn`: enrolments, lesson content and progress, badges, certificates
+(PDF in `certificate-pdf.ts`). Progress reports are idempotent (report ids recorded in `progress_receipts`) and
+serialized per student and course (`select … for update` on the enrolment). How the browser side uses it, with
+every endpoint: README, "Student experience".
+Learning paths and recommendations: `paths.ts`; the review queue: `review.ts`; assigned work as students see it:
+`assignments.ts`. Teachers set the work through `src/server/teaching/service.ts` behind `/api/teach`.
 
 ## Tests
 

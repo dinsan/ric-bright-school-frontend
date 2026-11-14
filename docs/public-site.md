@@ -8,6 +8,8 @@ the legal texts true. Phase 4 in `TODO.md` (FE-PUB-01, FE-PUB-02, FE-PUB-04).
 | `/` | `src/app/(marketing)/page.tsx` | Static, refreshed from the database every 5 minutes (ISR) |
 | `/courses` | `src/app/(marketing)/courses/page.tsx` | Static shell; results load in the browser from `/api/courses` |
 | `/courses/{slug}` | `src/app/(marketing)/courses/[slug]/page.tsx` | Rendered on first visit, cached, refreshed at most once a minute |
+| `/grades/{1-12}`, `/subjects/{slug}` | `src/app/(marketing)/grades/[grade]/page.tsx`, `…/subjects/[slug]/page.tsx` | Rendered on first visit, cached, refreshed every 5 minutes |
+| `/pricing` | `src/app/(marketing)/pricing/page.tsx` | Static, refreshed every 5 minutes; refreshed at once when an admin changes a price |
 | `/search?q=` | `src/app/(marketing)/search/page.tsx` | Rendered per request; `noindex, follow` |
 | `/privacy`, `/terms`, `/cookies`, `/safety`, `/contact` | `src/app/(marketing)/…/page.tsx`, texts in `src/features/legal/content/` | Static |
 | `/sitemap.xml`, `/robots.txt` | `src/app/sitemap.ts`, `src/app/robots.ts` | Sitemap on request; robots static |
@@ -33,6 +35,37 @@ the safety promises, questions and answers, and a closing call to action.
   (for example "no chat", "no adverts", "class code and three pictures"). Features that don't exist yet are labelled
   as coming ("Coming next: your classes…"). Check these texts when a feature changes.
 
+## Grade and subject pages (FE-PUB-03)
+
+`/grades/4` and `/subjects/mathematics` are the main organic entry points: a parent searching "grade 4 online
+courses" lands on a server-rendered page, not a filtered client view. Grade pages group the grade's published
+courses by subject (with a strip linking the other eleven grades); subject pages group the subject's courses by
+grade band, with links to the grade pages. Both are in the sitemap (all twelve grades always; subjects once they
+have a published course), carry `CollectionPage` + `ItemList` structured data, and render an empty state rather
+than 404 when a grade has no courses yet (unknown grades and subjects are 404). The home grade picker, the home
+subject cards and the course page breadcrumb link to them.
+
+## Prices (FE-PUB-07)
+
+Every course has one price in cents (`courses.price_cents`, 0 = free; the currency is site-wide,
+`COURSE_CURRENCY` in `src/lib/format.ts`). It shows as a badge on course cards, a "Price" fact and an `Offer`
+in the JSON-LD on course pages, and drives `/pricing`, whose numbers (free and paid counts, price ranges per
+subject) come from the database — nothing invented. There are no subscription plans or checkout yet, and the
+page says so; a plan comparison arrives with billing (BE-BILL-01).
+
+Admins set prices on `/admin/courses` (search, status filter, inline editor per course). The change is recorded
+in `audit_events` (`admin.course_price_updated`) and the affected cached pages are revalidated immediately
+(`revalidatePath` from the PATCH handler), so the public price never lags more than a moment.
+
+## A child's data (FE-PUB-11)
+
+Under My children, a parent can download a copy of everything Lumina stores about a child
+(`GET /api/me/children/{id}/data`, a JSON file whose name never carries the child's name) and delete the child's
+account (`DELETE /api/me/children/{id}`, confirm dialog with the data download offered first). Deletion cascades
+(sessions, sign-in methods, guardianships, class memberships); the audit log records only the child's id, never
+the name. The privacy policy points parents here. The export includes the child's learning (courses, lessons, time per day,
+Phase 5) and must grow with every new kind of data about children (BE-APP-10).
+
 ## Search
 
 Global search across courses and lessons (FE-PUB-06), in every header: the public one and the signed-in top bar.
@@ -49,6 +82,13 @@ Global search across courses and lessons (FE-PUB-06), in every header: the publi
 - **Lessons land in their course**: lesson results link to `/courses/{course}#lesson-{slug}`; the course page now
   lists its lessons (the course outline), and the targeted lesson is highlighted and focused, also after
   client-side navigation (`lesson-target.tsx`).
+- **Small screens**: the dialog's results can overflow, so the scroll area is a focusable named region (Tab from
+  the box, arrow keys scroll) and the arrows keep the highlighted option in view; the combobox pattern is
+  untouched (FE-PUB-13, checked with axe at 360 × 740, dark).
+- **Follow-ups built** (FE-PUB-12): spelling synonyms (maths/math, colour/color), a grade and subject filter on
+  `/search` (plain selects in the GET form, no JavaScript needed), and "Did you mean …?" on close matches, in the
+  dialog and on the page. Still open: indexing lesson content (needs FE-STU-03) and swapped letters in short
+  words ("pyhton").
 - How matching works (prefixes, stemming, typos, grades): `docs/backend.md`, Search.
 
 ## SEO

@@ -40,7 +40,7 @@ export function SubjectOverview({ subjects }: { subjects: SubjectSummary[] }) {
         return (
           <li key={subject.id}>
             <Card asChild interactive className="h-full gap-3">
-              <Link href={`/courses?subject=${encodeURIComponent(subject.slug)}`}>
+              <Link href={`/subjects/${encodeURIComponent(subject.slug)}`}>
                 <span className="inline-flex size-12 items-center justify-center rounded-control border-2 border-line bg-accent text-accent-fg">
                   <Icon aria-hidden className="size-6" />
                 </span>

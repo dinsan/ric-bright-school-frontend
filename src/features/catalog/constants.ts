@@ -9,6 +9,9 @@ export const GRADES: readonly number[] = Array.from(
 
 export const PAGE_SIZE = 12;
 
+/** The largest price an admin can set: $999.99, well above any single course. */
+export const MAX_PRICE_CENTS = 99_999;
+
 export interface GradeBand {
   id: GradeBandId;
   label: string;

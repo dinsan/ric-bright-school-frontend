@@ -4,7 +4,8 @@ import { buildCatalogQuery, parseCatalogParams } from "@/features/catalog/url-st
 import { PICTURE_KEYS as CONTRACT_PICTURES } from "@/features/auth/contract";
 import { PICTURE_KEYS, PICTURES, pictureInfo } from "@/features/auth/pictures";
 import { gradeBandForGrade } from "@/lib/preferences";
-import { formatDate, pluralize } from "@/lib/format";
+import { formatDate, formatPrice, pluralize } from "@/lib/format";
+import { inputToCents } from "@/features/admin/price-input";
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -69,5 +70,22 @@ describe("formatting", () => {
 
   it("formats dates in UTC, the same on server and browser", () => {
     expect(formatDate("2025-01-15T23:30:00Z")).toBe("January 15, 2025");
+  });
+});
+
+describe("course prices", () => {
+  it("formats cents as people read them, with 0 as Free", () => {
+    expect(formatPrice(0)).toBe("Free");
+    expect(formatPrice(900)).toBe("$9.00");
+    expect(formatPrice(1250)).toBe("$12.50");
+    expect(formatPrice(99_999)).toBe("$999.99");
+  });
+
+  it("reads a typed price as cents, or null when it isn't a price", () => {
+    expect(inputToCents("0")).toBe(0);
+    expect(inputToCents("12.5")).toBe(1250);
+    expect(inputToCents(" $9.99 ")).toBe(999);
+    expect(inputToCents("999.99")).toBe(99_999);
+    for (const wrong of ["", "-1", "1,50", "abc", "1000", "12.345"]) expect(inputToCents(wrong)).toBeNull();
   });
 });

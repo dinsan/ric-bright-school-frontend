@@ -15,12 +15,24 @@ export const siteConfig = {
   longDescription:
     "Lumina is a learning platform for Grades 1 to 12: courses by grade and subject, simple sign-in for young children, and accounts for parents and teachers. No ads, no tracking.",
   locale: "en",
-  nav: [{ href: "/courses", label: "Courses" }],
+  /**
+   * Outside services, linked from the footer once they exist (FE-PUB-10). Set at build time:
+   * SITE_STATUS_URL (the status page, e.g. a hosted status provider) and SITE_HELP_URL (the help
+   * center). Unset, the links are simply not shown — no dead links.
+   */
+  statusPage: process.env.SITE_STATUS_URL || null,
+  helpCenter: process.env.SITE_HELP_URL || null,
+  nav: [
+    { href: "/courses", label: "Courses" },
+    // The phone header has no room for more links; Pricing stays reachable there through the footer.
+    { href: "/pricing", label: "Pricing", desktopOnly: true },
+  ],
   footer: [
     {
       heading: "Learn",
       links: [
         { href: "/courses", label: "All courses" },
+        { href: "/pricing", label: "Pricing" },
         { href: "/sign-up", label: "Create an account" },
         { href: "/sign-in", label: "Sign in" },
       ],

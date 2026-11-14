@@ -12,6 +12,8 @@ export interface ParsedQuery {
   text: string;
   /** A grade mentioned in the query: "grade 4", "gr 4", "g4", "year 4", "4th grade". */
   grade: number | null;
+  /** A subject filter chosen on the /search page (slug); never parsed out of the text. */
+  subject?: string | null;
 }
 
 const MAX_TERMS = 8;
@@ -40,6 +42,68 @@ export function parseSearchQuery(raw: string): ParsedQuery {
  */
 export function isSearchable(query: ParsedQuery): boolean {
   return query.grade !== null || query.text.replace(/\s/g, "").length >= 2;
+}
+
+/**
+ * School words spelled differently in different places (FE-PUB-12): searching one finds the others.
+ * Whole words only; prefix matching already covers "math" → "mathematics". Kept deliberately small:
+ * a wrong synonym quietly pollutes results.
+ */
+const SYNONYM_GROUPS: readonly string[][] = [
+  ["math", "maths", "mathematics"],
+  ["color", "colour"],
+  ["gray", "grey"],
+  ["center", "centre"],
+  ["meter", "metre"],
+  ["liter", "litre"],
+];
+
+/** The other spellings of `term` (lower-case), or []. */
+export function synonymsFor(term: string): string[] {
+  for (const group of SYNONYM_GROUPS) {
+    if (group.includes(term)) return group.filter((word) => word !== term);
+  }
+  return [];
+}
+
+/** Trigram similarity of two words (0 to 1), like PostgreSQL's pg_trgm: shared 3-grams over all 3-grams. */
+export function trigramSimilarity(a: string, b: string): number {
+  const grams = (word: string) => {
+    const padded = `  ${word.toLowerCase()} `;
+    const set = new Set<string>();
+    for (let index = 0; index <= padded.length - 3; index++) set.add(padded.slice(index, index + 3));
+    return set;
+  };
+  const setA = grams(a);
+  const setB = grams(b);
+  const shared = [...setA].filter((gram) => setB.has(gram)).length;
+  const union = setA.size + setB.size - shared;
+  return union === 0 ? 0 : shared / union;
+}
+
+/**
+ * "Did you mean …?" (FE-PUB-12): when only close matches were found, rebuild the query with each term
+ * replaced by the most similar word from the titles actually found. Null when nothing would change.
+ */
+export function didYouMean(parsed: ParsedQuery, titles: string[]): string | null {
+  const words = [...new Set(titles.flatMap((title) => title.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []))];
+  if (words.length === 0 || parsed.terms.length === 0) return null;
+  let changed = false;
+  const corrected = parsed.terms.map((term) => {
+    let best: { word: string; score: number } | null = null;
+    for (const word of words) {
+      const score = trigramSimilarity(term, word);
+      // 0.3: low enough for a dropped letter before a plural ("fracton" / "fractions"), and safe
+      // because the candidate words come only from titles the close-match search already found.
+      if (score >= 0.3 && (best === null || score > best.score)) best = { word, score };
+    }
+    if (best && best.word !== term) {
+      changed = true;
+      return best.word;
+    }
+    return term;
+  });
+  return changed ? corrected.join(" ") : null;
 }
 
 export interface TextPart {

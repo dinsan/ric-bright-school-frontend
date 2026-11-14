@@ -11,7 +11,7 @@ export function GradePicker() {
           {GRADES.map((grade) => (
             <li key={grade}>
               <Link
-                href={`/courses?grade=${grade}`}
+                href={`/grades/${grade}`}
                 className={cn(
                   "flex aspect-square items-center justify-center rounded-card border-2 border-line text-4xl font-black shadow-sticker sm:text-5xl",
                   "transition-[transform,box-shadow] duration-fast ease-playful hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-sticker-lg",

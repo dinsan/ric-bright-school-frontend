@@ -9,9 +9,11 @@ import { GradeMark } from "@/features/catalog/components/grade-tile";
 import { JsonLd } from "@/components/seo/json-ld";
 import { absoluteUrl, siteConfig } from "@/config/site";
 import type { Course } from "@/features/catalog/types";
-import { formatDate } from "@/lib/format";
+import { COURSE_CURRENCY, formatDate, formatPrice } from "@/lib/format";
 import { pageMetadata } from "@/lib/seo";
-import { courseLessons, getCourseBySlug } from "@/server/catalog/service";
+import { courseLessons, getCourseBySlug, relatedCourses } from "@/server/catalog/service";
+import { CourseGrid } from "@/features/catalog/components/course-grid";
+import { StartLearning } from "@/features/learn/components/start-learning";
 
 interface CoursePageProps {
   params: Promise<{ slug: string }>;
@@ -56,6 +58,15 @@ function courseJsonLd(course: Course) {
     educationalLevel: `Grade ${course.grade_level}`,
     about: { "@type": "Thing", name: course.subject.name },
     provider: { "@type": "EducationalOrganization", name: siteConfig.name, url: absoluteUrl("/") },
+    isAccessibleForFree: course.price_cents === 0,
+    offers: {
+      "@type": "Offer",
+      price: (course.price_cents / 100).toFixed(2),
+      priceCurrency: COURSE_CURRENCY,
+      availability: "https://schema.org/InStock",
+      url: absoluteUrl(`/courses/${course.slug}`),
+      category: course.price_cents === 0 ? "Free" : "Paid",
+    },
     ...(course.published_at ? { datePublished: course.published_at } : {}),
     dateModified: course.updated_at,
   };
@@ -64,7 +75,7 @@ function courseJsonLd(course: Course) {
 export default async function CoursePage({ params }: CoursePageProps) {
   const { slug } = await params;
   const course = await loadCourse(slug);
-  const lessons = await courseLessons(course.id);
+  const [lessons, related] = await Promise.all([courseLessons(course.id), relatedCourses(course)]);
   const minutes = totalMinutes(lessons);
 
   return (
@@ -74,7 +85,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
         className={layout.breadcrumb}
         items={[
           { label: "Courses", href: "/courses" },
-          { label: `Grade ${course.grade_level}`, href: `/courses?grade=${course.grade_level}` },
+          { label: `Grade ${course.grade_level}`, href: `/grades/${course.grade_level}` },
           { label: course.title },
         ]}
       />
@@ -103,6 +114,10 @@ export default async function CoursePage({ params }: CoursePageProps) {
                 <dt className="font-bold text-fg-muted">Grade</dt>
                 <dd className="mt-0.5 text-body font-extrabold">{course.grade_level}</dd>
               </div>
+              <div>
+                <dt className="font-bold text-fg-muted">Price</dt>
+                <dd className="mt-0.5 text-body font-extrabold">{formatPrice(course.price_cents)}</dd>
+              </div>
               {lessons.length > 0 && (
                 <div>
                   <dt className="font-bold text-fg-muted">Length</dt>
@@ -118,9 +133,19 @@ export default async function CoursePage({ params }: CoursePageProps) {
                 </div>
               )}
             </dl>
+            <StartLearning courseSlug={course.slug} />
           </aside>
         </Card>
       </div>
+
+      {related.length > 0 && (
+        <section aria-labelledby="related-courses" className="mt-14">
+          <h2 id="related-courses" className="mb-5 text-heading">
+            Related courses
+          </h2>
+          <CourseGrid courses={related} />
+        </section>
+      )}
     </article>
   );
 }

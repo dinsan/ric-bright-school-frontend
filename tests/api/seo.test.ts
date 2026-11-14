@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import robots from "@/app/robots";
 import sitemap from "@/app/sitemap";
 import { getDb } from "@/server/db";
-import { catalogOverview } from "@/server/catalog/service";
+import { catalogOverview, gradeCourses, pricingOverview, relatedCourses, subjectWithCourses, toCourse } from "@/server/catalog/service";
 import { jsonLdString, pageMetadata } from "@/lib/seo";
 import { createCatalog } from "../support/factories";
 
@@ -17,6 +17,11 @@ describe("sitemap.xml", () => {
         "http://localhost:3000/courses",
         "http://localhost:3000/courses/fractions",
         "http://localhost:3000/courses/counting",
+        "http://localhost:3000/pricing",
+        "http://localhost:3000/grades/1",
+        "http://localhost:3000/grades/12",
+        "http://localhost:3000/subjects/mathematics",
+        "http://localhost:3000/subjects/science",
         "http://localhost:3000/privacy",
         "http://localhost:3000/terms",
         "http://localhost:3000/cookies",
@@ -31,7 +36,9 @@ describe("sitemap.xml", () => {
 
   it("still works with an empty catalog", async () => {
     const entries = await sitemap();
-    expect(entries.length).toBe(7);
+    // The fixed pages and the twelve grade pages; no course or subject pages.
+    expect(entries.length).toBe(8 + 12);
+    expect(entries.some((entry) => entry.url.includes("/subjects/"))).toBe(false);
   });
 });
 
@@ -74,5 +81,49 @@ describe("metadata helpers", () => {
     const text = jsonLdString({ name: "</script><script>alert(1)</script>" });
     expect(text).not.toContain("<");
     expect(JSON.parse(text).name).toBe("</script><script>alert(1)</script>");
+  });
+});
+
+describe("grade and subject pages (FE-PUB-03)", () => {
+  it("lists a grade's published courses in subject then title order", async () => {
+    await createCatalog();
+    const grade4 = await gradeCourses(4);
+    expect(grade4.map((course) => course.slug)).toEqual(["fractions", "plants"]); // never the draft
+    expect(await gradeCourses(12)).toEqual([]);
+  });
+
+  it("lists a subject's published courses in grade order, and null for unknown subjects", async () => {
+    await createCatalog();
+    const maths = await subjectWithCourses("mathematics");
+    expect(maths?.subject.name).toBe("Mathematics");
+    expect(maths?.courses.map((course) => course.slug)).toEqual(["counting", "fractions"]);
+    expect(await subjectWithCourses("astrology")).toBeNull();
+    expect(await subjectWithCourses("x".repeat(100))).toBeNull();
+  });
+});
+
+describe("related courses (FE-PUB-05)", () => {
+  it("prefers the same subject in nearby grades, topped up with the same grade's other subjects", async () => {
+    await createCatalog();
+    const fractions = await getDb().course.findUnique({ where: { slug: "fractions" }, include: { subject: true } });
+    const related = await relatedCourses(toCourse(fractions!, fractions!.subject));
+    // Same subject (counting, grade 1) first, then the same grade's science course; never itself or drafts.
+    expect(related.map((course) => course.slug)).toEqual(["counting", "plants"]);
+  });
+});
+
+describe("pricing overview (FE-PUB-07)", () => {
+  it("counts free and paid published courses and the price range per subject", async () => {
+    await createCatalog();
+    const overview = await pricingOverview();
+    expect(overview).toMatchObject({ free_count: 2, paid_count: 1, min_price_cents: 1250, max_price_cents: 1250 });
+    expect(overview.subjects).toEqual([
+      expect.objectContaining({ slug: "mathematics", course_count: 2, free_count: 1, min_price_cents: 1250, max_price_cents: 1250 }),
+      expect.objectContaining({ slug: "science", course_count: 1, free_count: 1, min_price_cents: null, max_price_cents: null }),
+    ]);
+  });
+
+  it("handles an empty catalog", async () => {
+    expect(await pricingOverview()).toEqual({ free_count: 0, paid_count: 0, min_price_cents: null, max_price_cents: null, subjects: [] });
   });
 });

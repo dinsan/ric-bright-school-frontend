@@ -23,7 +23,7 @@ const lessonHit: SearchHit = {
 };
 
 function results(overrides: Partial<SearchResults> = {}): SearchResults {
-  return { query: "frac", grade: null, courses: [courseHit], lessons: [lessonHit], more: { courses: false, lessons: false }, approximate: false, ...overrides };
+  return { query: "frac", grade: null, courses: [courseHit], lessons: [lessonHit], more: { courses: false, lessons: false }, approximate: false, suggestion: null, ...overrides };
 }
 
 function setup(answer: (q: string) => SearchResults = () => results()) {
@@ -113,6 +113,33 @@ describe("global search", () => {
     await user.keyboard("{ArrowUp}{Enter}");
     expect(router.push).toHaveBeenCalledWith("/courses/fractions#lesson-equivalent-fractions");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  // R (FE-PUB-13): on a small screen the results overflow, and axe flagged the scrollable area as
+  // unreachable from the keyboard. It is now a focusable named region (Tab from the box, arrows scroll),
+  // and the combobox pattern is untouched: arrows in the box move the highlight and keep it in view.
+  it("lets the keyboard reach the scrollable results area without leaving the combobox pattern", async () => {
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { user } = setup();
+    await user.click(screen.getByRole("link", { name: /Search/ }));
+    await user.type(combobox(), "frac");
+    await screen.findByRole("option", { name: /^Fractions Made Simple/ });
+
+    const region = screen.getByRole("region", { name: "Search results" });
+    expect(region).toHaveAttribute("tabindex", "0");
+    await user.tab(); // the Esc (close) button
+    await user.tab();
+    expect(region).toHaveFocus();
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(combobox()).toHaveFocus();
+
+    // Arrows still highlight options (aria-activedescendant), and the highlight is kept in view.
+    await user.keyboard("{ArrowDown}");
+    const lesson = screen.getByRole("option", { name: /Equivalent fractions/ });
+    expect(lesson).toHaveAttribute("aria-selected", "true");
+    expect(combobox()).toHaveFocus();
+    expect(scrolled.mock.instances).toContain(lesson);
   });
 
   it("opens a result with a click, and the full results page from 'See all'", async () => {

@@ -47,7 +47,7 @@ describe("catalog API", () => {
     const browser = new Browser();
     const found = await browser.call(courseBySlug, { path: "/api/courses/slug/fractions", params: { slug: "fractions" } });
     expect(found.status).toBe(200);
-    expect(found.body).toMatchObject({ slug: "fractions", grade_level: 4, status: "published" });
+    expect(found.body).toMatchObject({ slug: "fractions", grade_level: 4, status: "published", price_cents: 1250 });
     const draft = await browser.call(courseBySlug, { path: "/api/courses/slug/secret-draft", params: { slug: "secret-draft" } });
     expect(draft.status).toBe(404);
     expect(draft.body.error.code).toBe("course_not_found");

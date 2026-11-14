@@ -148,6 +148,53 @@ export interface LinkCode {
   expires_at: string;
 }
 
+/**
+ * GET /me/children/{child_id}/data: a copy of everything Lumina stores about the child, for the
+ * parent to keep (FE-PUB-11). Grows as features add data about children (learning progress, BE-APP-10).
+ */
+export interface ChildDataExport {
+  exported_at: string;
+  child: {
+    id: string;
+    display_name: string;
+    grade_level: number | null;
+    username: string | null;
+    sign_in_method: ChildSignInMethod | null;
+    language: string | null;
+    timezone: string | null;
+    created_at: string;
+    last_login_at: string | null;
+  };
+  /** The parents and guardians connected to the account. */
+  guardians: Array<{ display_name: string; linked_at: string; consent_at: string | null }>;
+  /** The school classes the child is in. */
+  classes: Array<{ name: string; joined_at: string }>;
+  /** Their learning (Phase 5): courses taken, lessons opened or finished, and learning time per day. */
+  learning: {
+    courses: Array<{ course: string; enrolled_at: string; completed_at: string | null }>;
+    lessons: Array<{
+      course: string;
+      lesson: string;
+      status: "started" | "completed";
+      seconds_spent: number;
+      started_at: string;
+      completed_at: string | null;
+      /** Where each video was left, in seconds. */
+      video_positions: Record<string, number>;
+    }>;
+    days: Array<{ day: string; seconds_spent: number; lessons_completed: number }>;
+    badges: Array<{ badge: string; earned_at: string }>;
+    /** Notes the child wrote in lessons, and their bookmarks (FE-STU-06). */
+    notes: Array<{ course: string; lesson: string; about: string | null; text: string; written_at: string; changed_at: string }>;
+    bookmarks: Array<{ course: string; lesson: string; about: string | null; video_seconds: number | null; created_at: string }>;
+    /** Quick-check questions scheduled for review: how well known, and when they come back. */
+    review: Array<{ course: string; lesson: string; question: string; box: number; reviews: number; misses: number; due_at: string }>;
+    certificates: Array<{ code: string; course: string; student_name: string; issued_at: string }>;
+  };
+  /** What the copy covers, in plain words. */
+  notes: string;
+}
+
 // --- Classroom sign-in (class code + 3 pictures) -----------------------------------------------------
 
 /**
@@ -300,12 +347,16 @@ export const paths = {
   recoveryCodes: "/me/mfa/recovery-codes",
   teacherProfile: "/me/teacher-profile",
   children: "/me/children",
+  child: (childId: string) => `/me/children/${id(childId)}`,
+  childData: (childId: string) => `/me/children/${id(childId)}/data`,
   childSignIn: (childId: string) => `/me/children/${id(childId)}/sign-in`,
   linkChild: "/me/children/link",
   activeChild: "/me/active-child",
   linkCode: "/me/link-code",
 
   adminUsers: "/admin/users",
+  adminCourses: "/admin/courses",
+  adminCourse: (courseId: string) => `/admin/courses/${id(courseId)}`,
   adminUser: (userId: string) => `/admin/users/${id(userId)}`,
   adminTeacherVerification: (userId: string) => `/admin/users/${id(userId)}/teacher-verification`,
   adminMfa: (userId: string) => `/admin/users/${id(userId)}/mfa`,

@@ -7,6 +7,7 @@ import { roleHome, type Me, type Role } from "@/features/auth/contract";
 import { meFor } from "@/server/accounts/queries";
 import { isDatabaseUnavailable } from "@/server/db";
 import { COOKIE, PATH_HEADER } from "./cookies";
+import type { Auth } from "./context";
 import { validateSessionToken } from "./session";
 
 /**
@@ -19,18 +20,41 @@ export { PATH_HEADER };
 
 export type MeResult = { status: "ok"; user: Me; impersonating: boolean } | { status: "unauthorized" } | { status: "unavailable" };
 
-export const getCurrentUser = cache(async (): Promise<MeResult> => {
+/** The session behind the cookie, checked once per request (React cache): shared by the helpers below. */
+const getSession = cache(async (): Promise<{ status: "ok"; auth: Auth } | { status: "unauthorized" } | { status: "unavailable" }> => {
   const token = (await cookies()).get(COOKIE.session)?.value;
   if (!token) return { status: "unauthorized" };
   try {
     const valid = await validateSessionToken(token);
     if (!valid) return { status: "unauthorized" };
-    return { status: "ok", user: await meFor(valid.user), impersonating: valid.session.kind === "impersonation" };
+    return { status: "ok", auth: { ...valid, token } };
   } catch (error) {
     if (isDatabaseUnavailable(error)) return { status: "unavailable" };
     throw error;
   }
 });
+
+export const getCurrentUser = cache(async (): Promise<MeResult> => {
+  const session = await getSession();
+  if (session.status !== "ok") return session;
+  try {
+    return { status: "ok", user: await meFor(session.auth.user), impersonating: session.auth.session.kind === "impersonation" };
+  } catch (error) {
+    if (isDatabaseUnavailable(error)) return { status: "unavailable" };
+    throw error;
+  }
+});
+
+/**
+ * For Server Components that call services taking an `Auth` (like the API routes do): the signed-in
+ * user's session, after the same checks and redirects as requireUser.
+ */
+export async function requirePageAuth(roles?: Role[]): Promise<Auth> {
+  await requireUser(roles);
+  const session = await getSession();
+  if (session.status !== "ok") throw new Error("The account service is not reachable right now.");
+  return session.auth;
+}
 
 /**
  * For signed-in layouts and pages: the current user. Otherwise:

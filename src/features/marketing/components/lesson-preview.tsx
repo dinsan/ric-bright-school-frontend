@@ -208,7 +208,7 @@ export function LessonPreview() {
             </h3>
             <p>That is how every Lumina lesson works: one idea, explained simply, then a question to try with feedback straight away.</p>
             <div className="flex flex-wrap gap-3">
-              <ButtonLink href="/courses?grade=4" variant="primary">
+              <ButtonLink href="/grades/4" variant="primary">
                 See Grade 4 courses
               </ButtonLink>
               <Button variant="ghost" onClick={() => go("learn")}>

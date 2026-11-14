@@ -27,6 +27,8 @@ export interface SearchResults {
   more: { courses: boolean; lessons: boolean };
   /** Nothing matched exactly, so these are close matches for a possible typo ("fracton"). */
   approximate: boolean;
+  /** With close matches only: the corrected words ("fracton" → "fraction"), for "Did you mean …?". */
+  suggestion: string | null;
 }
 
 export const SEARCH_MAX_LENGTH = 100;

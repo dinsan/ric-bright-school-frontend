@@ -11,6 +11,8 @@ export type AuditAction =
   | "admin.mfa_reset"
   | "admin.impersonation_started"
   | "admin.impersonation_stopped"
+  | "admin.course_price_updated"
+  | "family.child_deleted"
   | "account.deleted"
   | "account.password_changed"
   | "account.email_changed"

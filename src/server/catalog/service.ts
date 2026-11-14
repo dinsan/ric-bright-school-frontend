@@ -28,6 +28,7 @@ export function toCourse(course: CourseRow, subject: SubjectRow): Course {
     summary: course.summary,
     description: course.description,
     grade_level: course.gradeLevel,
+    price_cents: course.priceCents,
     status: course.status,
     published_at: course.publishedAt?.toISOString() ?? null,
     created_at: course.createdAt.toISOString(),
@@ -115,6 +116,111 @@ export async function catalogOverview(): Promise<CatalogOverview> {
     subjects: summaries,
     courses_per_grade: perGrade,
   };
+}
+
+/** A grade's published courses in subject then title order, for /grades/{grade} (FE-PUB-03). */
+export async function gradeCourses(grade: number): Promise<Course[]> {
+  const rows = await getDb().course.findMany({
+    where: { status: "published", gradeLevel: grade },
+    include: { subject: true },
+    orderBy: [{ subject: { name: "asc" } }, { title: "asc" }, { id: "asc" }],
+  });
+  return rows.map((row) => toCourse(row, row.subject));
+}
+
+/** A subject and its published courses in grade order, for /subjects/{slug} (FE-PUB-03). */
+export async function subjectWithCourses(slug: string): Promise<{ subject: Subject; courses: Course[] } | null> {
+  if (slug.length > 80) return null;
+  const subject = await getDb().subject.findUnique({ where: { slug } });
+  if (!subject) return null;
+  const rows = await getDb().course.findMany({
+    where: { status: "published", subjectId: subject.id },
+    include: { subject: true },
+    orderBy: [{ gradeLevel: "asc" }, { title: "asc" }, { id: "asc" }],
+  });
+  return { subject: toSubject(subject), courses: rows.map((row) => toCourse(row, row.subject)) };
+}
+
+/**
+ * Courses to show under "Related courses" on a course page (FE-PUB-05): the same subject in nearby
+ * grades first (closest grade wins), topped up with the same grade's courses in other subjects.
+ */
+export async function relatedCourses(course: Course, limit = 3): Promise<Course[]> {
+  const db = getDb();
+  const published = { status: "published" as const, id: { not: course.id } };
+  const [sameSubject, sameGrade] = await Promise.all([
+    db.course.findMany({
+      where: { ...published, subject: { slug: course.subject.slug } },
+      include: { subject: true },
+      orderBy: [{ gradeLevel: "asc" }, { title: "asc" }, { id: "asc" }],
+    }),
+    db.course.findMany({
+      where: { ...published, gradeLevel: course.grade_level, subject: { slug: { not: course.subject.slug } } },
+      include: { subject: true },
+      orderBy: [{ title: "asc" }, { id: "asc" }],
+      take: limit,
+    }),
+  ]);
+  // Stable sort: ties keep the grade-then-title order from the query.
+  sameSubject.sort((a, b) => Math.abs(a.gradeLevel - course.grade_level) - Math.abs(b.gradeLevel - course.grade_level));
+  return [...sameSubject, ...sameGrade].slice(0, limit).map((row) => toCourse(row, row.subject));
+}
+
+export interface SubjectPricing extends Subject {
+  course_count: number;
+  free_count: number;
+  /** Cheapest and dearest paid course (cents); null when every course is free. */
+  min_price_cents: number | null;
+  max_price_cents: number | null;
+}
+
+export interface PricingOverview {
+  free_count: number;
+  paid_count: number;
+  min_price_cents: number | null;
+  max_price_cents: number | null;
+  /** Subjects with at least one published course, most courses first (like the home page). */
+  subjects: SubjectPricing[];
+}
+
+/** What the pricing page says about the catalog: real numbers, from published courses only (FE-PUB-07). */
+export async function pricingOverview(): Promise<PricingOverview> {
+  const db = getDb();
+  const courses = await db.course.findMany({
+    where: { status: "published" },
+    select: { priceCents: true, subjectId: true },
+  });
+  const paidPrices = courses.filter((course) => course.priceCents > 0).map((course) => course.priceCents);
+  const subjectRows = await db.subject.findMany({ where: { id: { in: [...new Set(courses.map((course) => course.subjectId))] } }, orderBy: { name: "asc" } });
+  const subjects: SubjectPricing[] = subjectRows.map((subject) => {
+    const own = courses.filter((course) => course.subjectId === subject.id);
+    const paid = own.filter((course) => course.priceCents > 0).map((course) => course.priceCents);
+    return {
+      ...toSubject(subject),
+      course_count: own.length,
+      free_count: own.length - paid.length,
+      min_price_cents: paid.length ? Math.min(...paid) : null,
+      max_price_cents: paid.length ? Math.max(...paid) : null,
+    };
+  });
+  subjects.sort((a, b) => b.course_count - a.course_count);
+  return {
+    free_count: courses.length - paidPrices.length,
+    paid_count: paidPrices.length,
+    min_price_cents: paidPrices.length ? Math.min(...paidPrices) : null,
+    max_price_cents: paidPrices.length ? Math.max(...paidPrices) : null,
+    subjects,
+  };
+}
+
+/** Subject slugs with at least one published course, for the sitemap. */
+export async function publishedSubjectUrls(): Promise<Array<{ slug: string; updatedAt: Date }>> {
+  const rows = await getDb().subject.findMany({
+    where: { courses: { some: { status: "published" } } },
+    select: { slug: true, courses: { where: { status: "published" }, select: { updatedAt: true }, orderBy: { updatedAt: "desc" }, take: 1 } },
+    orderBy: { slug: "asc" },
+  });
+  return rows.map((row) => ({ slug: row.slug, updatedAt: row.courses[0]!.updatedAt }));
 }
 
 /** Every published course, for the sitemap. */

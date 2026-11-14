@@ -26,7 +26,7 @@ describe("sample lesson (home page)", () => {
     expect(screen.getByText("Yes!")).toBeInTheDocument();
     await user.click(finish);
     expect(screen.getByRole("heading", { name: "Lesson complete!" })).toHaveFocus();
-    expect(screen.getByRole("link", { name: "See Grade 4 courses" })).toHaveAttribute("href", "/courses?grade=4");
+    expect(screen.getByRole("link", { name: "See Grade 4 courses" })).toHaveAttribute("href", "/grades/4");
 
     await user.click(screen.getByRole("button", { name: /Start again/ }));
     expect(screen.getByRole("heading", { name: /the more parts, the smaller/ })).toHaveFocus();

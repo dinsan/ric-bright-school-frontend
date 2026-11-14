@@ -5,8 +5,8 @@ import { serverConfig } from "@/server/config";
 /**
  * The database client: Prisma ORM 7 over node-postgres (the `@prisma/adapter-pg` driver adapter, so no
  * Rust query engine is involved). One client (and one pg pool) per server process, created on first use
- * so `next build` never connects. In development it is kept on globalThis, so hot reloads don't open a
- * new pool each time.
+ * so `next build` never connects. It is kept on globalThis: hot reloads don't open a new pool each time,
+ * and every server bundle of a production build shares it (see shouldReplaceClient).
  *
  * The schema lives in prisma/schema.prisma; the client generated from it in src/generated/prisma
  * (`npm install` and `npm run db:client` regenerate it). See docs/backend.md, "Database".
@@ -40,10 +40,25 @@ function createClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
+/**
+ * Whether a cached client from another copy of the PrismaClient class must be replaced. Only while
+ * developing: a regenerated client (`npm run db:client` while `next dev` runs) is a new class, and
+ * switching to it makes new models and fields work without a restart.
+ *
+ * Never in production. A production build contains several copies of the generated client (the page
+ * bundle, the Route Handler bundle…), each its own class. Replacing the client whenever "the class
+ * changed" then meant that a page render and an API request running at the same time kept
+ * disconnecting each other's client: interactive transactions died mid-way ("Transaction not found",
+ * P2028) and the connection pool was rebuilt over and over. The copies are the same generated code, so
+ * one client per process, shared by every bundle, is correct (errors are matched by name and code,
+ * never with instanceof, so that holds across copies).
+ */
+export function shouldReplaceClient(cachedClass: unknown, currentClass: unknown, environment = process.env.NODE_ENV): boolean {
+  return environment === "development" && cachedClass !== currentClass;
+}
+
 export function getDb(): PrismaClient {
-  // A regenerated client (`npm run db:client` while `next dev` runs) is a new class: switch to it, so
-  // new models and fields work without restarting the dev server.
-  if (!globalForDb.luminaPrisma || globalForDb.luminaPrismaClass !== PrismaClient) {
+  if (!globalForDb.luminaPrisma || shouldReplaceClient(globalForDb.luminaPrismaClass, PrismaClient)) {
     void globalForDb.luminaPrisma?.$disconnect();
     globalForDb.luminaPrisma = createClient();
     globalForDb.luminaPrismaClass = PrismaClient;

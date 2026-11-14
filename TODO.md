@@ -20,6 +20,9 @@ Task list for the Lumina app (pages, API and database in one Next.js project). W
 
 | Tag | Meaning |
 | --- | --- |
+| `[x]` | Done. |
+| `[>]` | The code is done or can't proceed: waiting on something outside this repository (a lawyer, a real provider, a business decision). The note says what. |
+| `[~]` | Possibly not relevant right now — review and decide whether to keep, reshape or remove the task. |
 | `P0` | Required for launch. Do first. |
 | `P1` | Important, can follow launch. |
 | `P2` | Nice to have / later. |
@@ -90,6 +93,7 @@ The app no longer depends on a separate backend project: the catalog and account
 - [ ] BE-APP-14 · P0 · S — Check the Prisma tooling where the native schema engine can be downloaded (the environment the move was made in couldn't reach binaries.prisma.sh, so the CLI ran on a WebAssembly stand-in, see `docs/prisma-migration.md`): on a normal machine, `npm ci`, `npm run db:migrate` on an empty database and on a copy of a Drizzle-era database, `npm run db:generate -- --name x` (then delete it), `npm run db:check`, `npm run db:studio`; in Docker (Alpine + OpenSSL) the `app` start-up and the `migrate` job of `compose.prod.yaml`. Part of FE-FIX-02.
 - [ ] BE-APP-15 · P1 · S — CI checks for the schema (with BE-APP-06): `npx prisma validate`, `npx prisma format --check`, and after `npm run db:migrate` on an empty database, `npm run db:check` (fails when `schema.prisma` changed without a migration).
 - [ ] BE-APP-16 · P2 · S — Once every database has been adopted (no `drizzle` schema left in any environment), delete the Drizzle adoption code: `adoptDrizzleDatabase` in `scripts/lib/migrations.ts`, its call in `scripts/db-migrate.ts`, the test-database recreation in `tests/support/global-setup.ts`, and the "Databases created before Prisma" notes.
+      Already removed (it broke `npm run typecheck`: it imported the uninstalled `drizzle-orm`): the stale, unimported `src/server/db/schema.ts` left over from the Drizzle era.
 - [ ] BE-APP-17 · P2 · S — Consider Prisma TypedSQL (`prisma/sql/*.sql`) for the search queries, for generated result types instead of hand-written row interfaces. It needs a database when generating the client, which the Docker build doesn't have: decide how (generate in CI with a database, or keep `$queryRaw`).
 - [x] FE-FIX-03 · P0 · S — Add `loading.tsx` for `/courses/[slug]` and make `error.tsx` report the error (currently the error parameter is unused).
       Note: the skeleton streams on direct loads. On client-side navigation Next.js waits for `generateMetadata` (which fetches the course) before showing it, so with a slow API the previous page stays until the course arrives. Revisit with partial prefetching / Cache Components.
@@ -195,37 +199,60 @@ Implemented in this app, end to end (pages, API, database); see `docs/auth.md`. 
       Done (`docs/public-site.md`): grade picker first with the real course count; subjects from the database (courses and grades per subject); how it works; a working sample lesson (explain, try, feedback, done; keyboard and screen-reader friendly); parents and teachers sections with sign-up links that choose the role; safety promises; FAQ; closing call to action. Static, refreshed every 5 minutes. Replace the sample lesson with a real one after FE-STU-03.
 - [x] FE-PUB-02 · P0 · M — SEO: sitemap, robots, canonical URLs, Open Graph and Twitter images per course, JSON-LD (`Course`), and meaningful `<title>` and descriptions.
       Done: `SITE_URL` (build time) for every absolute URL; canonical URLs and Open Graph / Twitter cards on every public page; `sitemap.xml` with every published course (rendered on request); `robots.txt`; share images drawn with next/og (site-wide and one per course, Lexend); JSON-LD `Course`, `EducationalOrganization`, `WebSite`; previews, staging and localhost builds are noindex. Still to do once live: submit the sitemap in Google Search Console and Bing Webmaster Tools, and check the Rich Results Test.
-- [ ] FE-PUB-03 · P0 · M — Dedicated pages per grade (`/grades/4`) and per subject (`/subjects/mathematics`), statically generated with revalidation; these are the main organic entry points.
-- [ ] FE-PUB-04 · P0 · M — Legal and trust pages: privacy policy (with a child-friendly summary), terms, cookie policy, safety for children, contact. Content from legal review.
+- [x] FE-PUB-03 · P0 · M — Dedicated pages per grade (`/grades/4`) and per subject (`/subjects/mathematics`), statically generated with revalidation; these are the main organic entry points.
+      Done (`docs/public-site.md`): rendered on first visit and revalidated every 5 minutes (builds need no database); grade pages group by subject with a strip to the other grades, subject pages group by grade band; `CollectionPage` + `ItemList` JSON-LD; in the sitemap; linked from the home grade picker, the home subject cards and the course breadcrumb; empty states for grades without courses, 404 for unknown grades and subjects; checked with axe at 360 px and 1280 px, light and dark, no horizontal scrolling.
+- [>] FE-PUB-04 · P0 · M — Legal and trust pages: privacy policy (with a child-friendly summary), terms, cookie policy, safety for children, contact. Content from legal review.
+      Waiting on the legal review only; nothing left to build until it happens.
       Built: /privacy (with a version for kids), /terms, /cookies (table generated from the code's cookies and storage keys), /safety (tips for kids, families and teachers; reporting a concern), /contact; linked from the footer and from the consent checkboxes. The texts are drafts written from what the code does, and every page says so.
       Done when: a lawyer has reviewed the texts; `src/config/legal.ts` has the real company, address, data location, governing law, providers, retention periods and contact addresses (and the addresses work); `reviewed: true`.
-- [ ] FE-PUB-11 · P0 · S — Deleting a child's account from My children (today the privacy policy sends parents to the privacy email), and downloading a copy of a child's data (with BE-APP-10).
+- [x] FE-PUB-11 · P0 · S — Deleting a child's account from My children (today the privacy policy sends parents to the privacy email), and downloading a copy of a child's data (with BE-APP-10).
+      Done (`docs/public-site.md`, "A child's data"): per child, "Download their data" (JSON, everything stored about the child today; the filename never carries their name) and "Delete account" (confirm dialog offering the download first; cascade delete; audited without the child's name). Only the child's own guardians can do either; the privacy policy now points here. The export includes learning progress since FE-STU-00, and must grow with every new kind of data about children (with BE-APP-10).
 - [ ] FE-PUB-05 · P1 · M — Course detail upgrade: syllabus (units and lessons), prerequisites, standards covered, estimated time, preview lesson, enrol button, related courses. (needs BE-CAT-01, BE-CAT-05)
-      Partly done: the course page lists its lessons in order with their length and the total time (`lessons` table, added for search). Still needed: units, prerequisites, standards, preview lesson, enrol, related courses.
+      Partly done: the course page lists its lessons in order with their length and the total time (`lessons` table, added for search); the price (with an `Offer` in the JSON-LD); and related courses (same subject in nearby grades first, then the same grade's other subjects). Enrol: **Start learning** for students (FE-STU-02). Still needed (all need the authoring backend, BE-CAT-01..05): units, prerequisites, standards, preview lesson.
 - [x] FE-PUB-06 · P1 · M — Global search with instant results (command palette style) across courses and lessons. (needs BE-CAT-07)
       Done (`docs/public-site.md`, Search; `docs/backend.md`, Search): PostgreSQL full text (weighted, stemmed and as written, prefix matching while typing) with typo tolerance as a fallback (pg_trgm), subjects and grades understood; `GET /api/search`; a Ctrl+K / "/" dialog in every header (ARIA combobox, grouped results, highlighted matches, announced counts) that is a link to a server-rendered `/search` page without JavaScript; lesson results land on the lesson in the course outline. Tested at every level (unit, component, API) and in Chromium (keyboard only, 360 px dark, no JavaScript, axe).
-- [ ] FE-PUB-13 · P1 · S — Search dialog on a small screen (360 × 740, dark): when the results overflow, axe reports `scrollable-region-focusable` on the results area (found while re-checking search after the move to Prisma; independent of it). Make the area reachable from the keyboard without breaking the combobox (options stay `aria-activedescendant`), or keep the results within the dialog height.
+- [x] FE-PUB-13 · P1 · S — Search dialog on a small screen (360 × 740, dark): when the results overflow, axe reports `scrollable-region-focusable` on the results area (found while re-checking search after the move to Prisma; independent of it). Make the area reachable from the keyboard without breaking the combobox (options stay `aria-activedescendant`), or keep the results within the dialog height.
+      Done: the results area is a focusable named region (Tab from the box, arrow keys scroll natively) and the arrows keep the highlighted option in view (`scrollIntoView`, block "nearest"); the combobox pattern is untouched. Re-checked in Chromium at 360 × 740 dark with overflowing results: zero axe violations; regression test in `tests/components/search.test.tsx`.
 - [ ] FE-PUB-12 · P2 · S — Search follow-ups: index lesson content once lessons have it (FE-STU-03); "did you mean" suggestions; synonyms for school words (maths/math, colour/color) with a PostgreSQL thesaurus or a synonym table; a course filter for grade and subject on `/search`. Swapped letters in short words ("pyhton") aren't found today.
-- [ ] FE-PUB-07 · P1 · M — Pricing page and plan comparison. (needs BE-BILL-01)
-- [ ] FE-PUB-08 · P1 · M — Cookie consent banner and consent-gated analytics. (needs BE-SEC-09)
-      Not needed while Lumina uses only strictly necessary storage (see /cookies). Required before adding analytics or anything optional.
-- [ ] FE-PUB-09 · P2 · M — Blog / resources section for parents and teachers (MDX or headless CMS).
-- [ ] FE-PUB-10 · P2 · S — Status page link and a help center link in the footer.
+      Mostly done: synonyms (curated list in `src/features/search/query.ts`, expanded into the tsquery — no thesaurus needed at this size), "Did you mean …?" on close matches (dialog and page), and grade + subject selects on `/search` (plain GET form, works without JavaScript). Still open: lesson content indexing (needs FE-STU-03) and swapped letters in short words.
+- [x] FE-PUB-07 · P1 · M — Pricing page and plan comparison. (needs BE-BILL-01)
+      Done for what exists (`docs/public-site.md`, "Prices"): every course has a price (`courses.price_cents`, 0 = free), shown on course cards and pages (and as an `Offer` in the JSON-LD); admins manage it on /admin/courses (audited, cached pages revalidated at once); /pricing is built from those real numbers (free and paid counts, ranges per subject) and says plainly that checkout isn't built yet. A plan comparison is deliberately not invented: there are no plans to compare until billing exists (BE-BILL-01) — revisit this line then.
+- [~] FE-PUB-08 · P1 · M — Cookie consent banner and consent-gated analytics. (needs BE-SEC-09)
+      Not relevant today: Lumina uses only strictly necessary storage (see /cookies), so a consent banner is not required — and showing one anyway would be noise. Keep the task only if analytics or other optional storage is actually planned; otherwise remove it and re-add when that decision is made.
+- [~] FE-PUB-09 · P2 · M — Blog / resources section for parents and teachers (MDX or headless CMS).
+      Needs a decision before any building: who writes it, how often, and in what tool. An empty blog scaffold would ship dead pages, which the public site deliberately avoids. Decide whether this stays in scope; build it when there is real content to publish.
+- [>] FE-PUB-10 · P2 · S — Status page link and a help center link in the footer.
+      The frontend part is done: the footer shows "Help center" and "Service status" links as soon as `SITE_HELP_URL` and `SITE_STATUS_URL` are set at build time (`src/config/site.ts`); unset, no dead links appear. Waiting on the actual services: choose a status page provider and a help-center home, then set the two variables.
 
 ---
 
 ## Phase 5 — Student experience
 
-- [ ] FE-STU-01 · P0 · L — Student dashboard: continue learning, assigned work due soon, streak and XP, recommended next courses. (needs BE-LRN-03)
-- [ ] FE-STU-02 · P0 · M — "My courses" with progress bars; enrol and unenrol from a course. (needs BE-LRN-01)
-- [ ] FE-STU-03 · P0 · XL — Lesson player (the core product). Split into: layout and navigation (previous/next, outline sidebar, mobile drawer); content block renderers (text, image, video, file, embed, interactive); completion handling with optimistic updates; resume where you left off. (needs BE-CAT-02, BE-LRN-02)
-- [ ] FE-STU-04 · P0 · M — Video player: HLS playback, captions, speed, keyboard controls, remembers position, poster and loading states. (needs BE-MEDIA-03)
-- [ ] FE-STU-05 · P0 · M — Progress sync that survives poor connections: queue updates locally and retry, de-duplicate, show a quiet "saved" indicator. (needs BE-LRN-02)
-- [ ] FE-STU-06 · P1 · M — Notes and bookmarks inside lessons. (needs BE-LRN-04)
-- [ ] FE-STU-07 · P1 · M — Gamification UI: streak flame, XP bar, badges shelf, level-up moment, celebration on completing a lesson or course. Optional and quieter for older grades. (needs BE-LRN-05)
-- [ ] FE-STU-08 · P1 · M — Certificates page and download. (needs BE-LRN-06)
-- [ ] FE-STU-09 · P1 · M — Learning path view for a grade and subject: what is done, what is next, what is locked and why. (needs BE-CAT-08)
-- [ ] FE-STU-10 · P2 · M — Review queue and practice mode. (needs BE-LRN-08, BE-ASM-08)
+How to build on the foundations (shell, data, API, hooks, analytics): README, "Student experience (Phase 5)". Add a line to its work log with every task.
+
+- [x] FE-STU-00 · P0 · M — Foundations for every student feature: student app shell, data model, API layer, hooks, learning analytics.
+      Done: `(app)/learn` (app shell) and `(focus)/learn` (FocusShell) layouts with `StudentProvider` / `useStudent()`; tables `enrollments`, `lesson_progress`, `learning_days` (migration `20261113162552_learning_progress`); `/api/learn` (enrolments, course progress, idempotent lesson progress reports serialized per course, summary); `src/features/learn` contract, `learnApi`, hooks with `learnKeys` and optimistic updates; pure analytics (progress, "continue", streaks in the student's time zone, XP and levels, minutes); `useVisibleSeconds` for time on task; a lesson scaffold at `/learn/courses/{course}/lessons/{lesson}` using all of it. Tested (unit, component, API incl. concurrency) and checked in Chromium with axe at 360 px and 1280 px, light and dark. Also fixed a production bug in `getDb()` (see the README work log).
+      Covers the backend parts of BE-LRN-01 (enrolment), BE-LRN-02 (progress) and BE-LRN-03 (summary); the lines below still need their screens.
+- [x] FE-STU-01 · P0 · L — Student dashboard: continue learning, assigned work due soon, streak and XP, recommended next courses. (needs BE-LRN-03)
+      Done (README, "Student experience" §6): the home screen students land on: continue learning, or the soonest assignment when nothing is in progress; questions to review; work due within 7 days (assignments, BE-SCH-03 built: `/api/teach` for verified teachers, `/api/learn/assignments`); streak and XP; recommended next courses with their reasons (`recommend.ts`); the learning path. Student navigation: Home, My courses, Learning path, Assignments, Review, Achievements.
+- [x] FE-STU-02 · P0 · M — "My courses" with progress bars; enrol and unenrol from a course. (needs BE-LRN-01)
+      Done: `/learn/courses` (progress bars, Start / Continue, certificate link) and `/learn/courses/{course}` (outline with statuses, Start / Continue, leave with confirmation; progress kept). Enrol from the public course page: **Start learning** (FE-PUB-05).
+- [x] FE-STU-03 · P0 · XL — Lesson player (the core product). Split into: layout and navigation (previous/next, outline sidebar, mobile drawer); content block renderers (text, image, video, file, embed, interactive); completion handling with optimistic updates; resume where you left off. (needs BE-CAT-02, BE-LRN-02)
+      Done (README, "Student experience" §2–3): `LessonPlayer` in the focused shell with the outline as a sidebar (large screens) and a drawer (phones), previous / next, Done with optimistic completion through the offline queue, resume ("Continue"), time on task; content blocks text, callout, image, video, file, embed (sandboxed, allow-listed), quick check, validated on the server (`blocks.ts`, no HTML); content for every seeded lesson. Checked in Chromium (keyboard, axe at 360 px and 1280 px, light and dark) and on the standalone production server.
+- [x] FE-STU-04 · P0 · M — Video player: HLS playback, captions, speed, keyboard controls, remembers position, poster and loading states. (needs BE-MEDIA-03)
+      Done (§4): HLS via native playback or lazily loaded hls.js (adaptive renditions, H.264 and VP9), MP4 fallback, captions (default track), speed 0.5–2×, mute, full screen, keyboard shortcuts, position remembered through the queue ("Carrying on from … · Start over"), poster, loading / buffering and error states with Try again, transcript. Media still served from `public/media` until BE-MEDIA (upload, storage, CDN).
+- [x] FE-STU-05 · P0 · M — Progress sync that survives poor connections: queue updates locally and retry, de-duplicate, show a quiet "saved" indicator. (needs BE-LRN-02)
+      Done (§5): `ProgressQueue` (coalesced per lesson, report ids reused on retry and deduplicated by the server's `progress_receipts`, backoff, offline pause, per-student localStorage, keepalive on page hide) and `<SaveStatus />` ("Saving… / Saved / Offline: saved on this device / Trying to save again…"). Offline lessons themselves (opening a new lesson with no connection) need the service worker: FE-PWA-02.
+- [x] FE-STU-06 · P1 · M — Notes and bookmarks inside lessons. (needs BE-LRN-04)
+      Done (README, "Student experience" §9; guide: `docs/student-guide.md`): BE-LRN-04 built (`lesson_notes`, `lesson_bookmarks`, `/api/learn/…/notes|bookmarks|annotations|notebook`); in the player a bookmark toggle, a notes panel (write about the lesson or a part, edit, delete), video moments; `/learn/notes` with search and links back to the exact spot and moment; private from teachers and classmates, included in the parent's data copy; a Note taker badge.
+- [x] FE-STU-07 · P1 · M — Gamification UI: streak flame, XP bar, badges shelf, level-up moment, celebration on completing a lesson or course. Optional and quieter for older grades. (needs BE-LRN-05)
+      Done (§6): streak flame, XP bar and levels, badge shelf (10 badges, earned server-side with the progress report or a note; "Note taker" added with FE-STU-06), level-up and badge toasts, course-finished dialog, "+10 XP", quick-check bounce. Optional (celebrations switch, per device) and calm for Grades 9–12; no leaderboards. Sound effects stay FE-DS-09.
+- [x] FE-STU-08 · P1 · M — Certificates page and download. (needs BE-LRN-06)
+      Done (§7): certificates issued with the last lesson (`certificates` table, readable number, names copied), `/learn/certificates` with preview and PDF download / open (pdf-lib, Lexend embedded, long names wrap). Private to the student, no public verification page (it would publish a child's name).
+- [x] FE-STU-09 · P1 · M — Learning path view for a grade and subject: what is done, what is next, what is locked and why. (needs BE-CAT-08)
+      Done (§7): `/learn/path` per subject with done / in progress / next / open / locked and the reason; prerequisites as data (`course_prerequisites`, BE-CAT-08) seeded per subject; the lock rule (unfinished prerequisite at or above the student's grade) enforced when enrolling (409 `course_locked`) and shown on the course page and in the lesson player.
+- [x] FE-STU-10 · P2 · M — Review queue and practice mode. (needs BE-LRN-08, BE-ASM-08)
+      Done (§8): review items from finished lessons' quick checks (`review_items`, BE-LRN-08), Leitner spacing (`spaced.ts`), `/learn/review` and focused sessions: review (due questions, rescheduled, a missed one retried once at the end) and practice (weakest first, schedule untouched); answers checked on the server. Question types beyond the quick check come with the quiz engine (BE-ASM-08, FE-ASM-02).
 
 ---
 
@@ -249,6 +276,7 @@ Implemented in this app, end to end (pages, API, database); see `docs/auth.md`. 
 - [ ] FE-TCH-05 · P0 · L — Question bank and quiz builder: create and edit questions per type, tag by standard and difficulty, build quizzes from the bank. (needs BE-ASM-01, BE-ASM-02)
 - [ ] FE-TCH-06 · P0 · M — Classes: create, join code, roster, add and remove students. (needs BE-SCH-02)
 - [ ] FE-TCH-07 · P0 · M — Assign work to a class or to selected students with due dates; track completion per student. (needs BE-SCH-03)
+      Backend ready: `/api/teach/classes`, `/api/teach/classes/{id}/assignments` (GET with each student's progress, POST), `DELETE /api/teach/assignments/{id}`; students see the work in `/learn`. Still needed: the teacher screens, and assigning to selected students rather than the whole class.
 - [ ] FE-TCH-08 · P0 · L — Gradebook table (sortable, filterable, keyboard navigable, handles hundreds of rows with virtualization), with CSV export. (needs BE-SCH-04)
 - [ ] FE-TCH-09 · P1 · M — Grading queue for open responses with rubric, feedback, and shortcuts for speed. (needs BE-ASM-05)
 - [ ] FE-TCH-10 · P1 · M — Class analytics: progress charts, struggling students, hardest questions. Charts must be readable without color alone. (needs BE-ADM-03)
@@ -313,6 +341,7 @@ Target: WCAG 2.2 AA. Students include children and learners with disabilities; t
 - [ ] FE-A11Y-05 · P1 · M — Reading support: dyslexia-friendly font option, adjustable text size and spacing, optional read-aloud for text blocks.
 - [ ] FE-A11Y-06 · P1 · S — Color contrast audit for every theme, including grade-band colors (yellow on white fails; check the marker color usage).
 - [ ] FE-A11Y-07 · P1 · S — Captions and transcripts always available for video; warn authors when missing.
+      Started: the player shows captions and transcripts and says when a video has none; `videosWithoutCaptions()` (`blocks.ts`) is ready for the authoring warning (FE-TCH-03).
 - [ ] FE-A11Y-08 · P2 · M — Independent accessibility audit before public launch.
 
 ---
@@ -332,6 +361,7 @@ Target: WCAG 2.2 AA. Students include children and learners with disabilities; t
 - [ ] FE-PERF-02 · P0 · M — Image handling with `next/image`, responsive sizes, modern formats, and a CDN loader.
 - [ ] FE-PERF-03 · P1 · M — Caching strategy: static + revalidate for public pages; `revalidatePath` / `revalidateTag` from the publish action itself (same app, no webhook needed).
 - [ ] FE-PERF-04 · P1 · M — Route-level code splitting for heavy features (editor, video player, charts); lazy load below-the-fold widgets.
+      Started: hls.js is loaded only when a lesson has a video (dynamic import).
 - [ ] FE-PERF-05 · P1 · M — Real-user monitoring (Web Vitals reporting) and error tracking (Sentry) with source maps. Do not send personal data about children.
 - [ ] FE-PERF-06 · P1 · S — Make heavy tables and lists virtualized (gradebook, rosters, question bank).
 - [ ] FE-QA-01 · P1 · M — Visual regression tests for key components and pages (Playwright screenshots or Chromatic).

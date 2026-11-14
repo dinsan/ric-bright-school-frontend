@@ -12,6 +12,7 @@ export function course(overrides: Partial<Course> = {}): Course {
     summary: "Halves, quarters and more.",
     description: null,
     grade_level: 4,
+    price_cents: 0,
     status: "published",
     published_at: "2025-01-15T09:00:00Z",
     created_at: "2025-01-15T09:00:00Z",
