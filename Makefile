@@ -4,7 +4,7 @@
 COMPOSE := docker compose
 APP := $(COMPOSE) exec app
 
-.PHONY: help up start stop down reset logs shell test test-unit psql rebuild migrate seed db-generate db-check \
+.PHONY: help up start stop down reset logs shell test test-unit engine-test engine-logs psql rebuild migrate seed db-generate db-check \
         prod-up prod-down install dev lint typecheck tokens build check db db-migrate db-seed db-studio
 
 help: ## Show this help
@@ -41,6 +41,12 @@ test: ## All tests in the app container: unit, components and API (the API tests
 test-unit: ## Only the fast tests (unit and components, no database)
 	$(APP) npm run test:unit
 
+engine-test: ## The formula engine's tests (Python, in its container), including every formula in the catalog
+	$(COMPOSE) exec formula-engine python -m pytest -p no:cacheprovider
+
+engine-logs: ## Follow the formula engine's logs
+	$(COMPOSE) logs -f formula-engine
+
 psql: ## PostgreSQL prompt on the development database
 	$(COMPOSE) exec db psql -U lumina -d lumina
 
@@ -74,8 +80,8 @@ install: ## npm ci
 dev: ## Dev server on your machine (needs DATABASE_URL, see .env.example; `make db` for a database)
 	npm run dev
 
-db: ## Only PostgreSQL and the email inbox in Docker, for `make dev`
-	$(COMPOSE) up -d db mail
+db: ## Only PostgreSQL, the email inbox and the formula engine in Docker, for `make dev`
+	$(COMPOSE) up -d db mail formula-engine
 
 db-migrate: ## Apply migrations (on your machine)
 	npm run db:migrate

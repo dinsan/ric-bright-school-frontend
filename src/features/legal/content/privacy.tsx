@@ -63,6 +63,10 @@ export const privacySections: LegalSection[] = [
           <li>Teachers: school, subjects, grades and a short bio, if you add them, and whether an admin has verified you as a teacher.</li>
           <li>If you turn on two-step verification: the secret shared with your authenticator app (encrypted) and your recovery codes (scrambled like passwords).</li>
           <li>If you sign in with Google, Microsoft or Apple: the account identifier and email address they send us. We never see your password for those services.</li>
+          <li>
+            Messages between a child&apos;s parents and their verified teachers (and any progress update shared in them), who read
+            them and when; teachers&apos; announcements to their classes, and which parents have read them.
+          </li>
         </ul>
         <h3>About children</h3>
         <ul>
@@ -70,8 +74,12 @@ export const privacySections: LegalSection[] = [
           <li>A username, and a password or a picture password (three pictures in order), stored scrambled.</li>
           <li>Which parents are linked to them, which classes they are in, and when a parent gave consent.</li>
           <li>
+            The parental controls a parent sets for them, if any: a daily learning-time limit, a bedtime, and whether reaching
+            them shows a reminder or pauses lessons and quizzes (and which parent last changed them).
+          </li>
+          <li>
             Their learning: the courses they start, which lessons they opened and finished, the time spent in lessons
-            (counted only while the lesson is on screen), where they stopped each video, which quick-check questions come back for review and when, the notes they write in lessons and
+            (counted only while the lesson is on screen), where they stopped each video, which quick-check questions come back for review and when, the answers they give in quizzes and their marks, the notes they write in lessons and
             the lessons and video moments they bookmark, the badges they earned and their
             certificates of completion (with their name as it was when the certificate was made). For streaks and minutes we
             keep one total per day, not a record of every click. Certificates are only ever shown to the student: there is no
@@ -106,14 +114,29 @@ export const privacySections: LegalSection[] = [
           <li>To show students their own progress: what to continue, their streak, points, badges and certificates.</li>
           <li>To bring back questions from finished lessons at the right time (review), and suggest which course to take next.</li>
           <li>
+            To save quiz answers as a student goes (so nothing is lost if they stop), mark them, and show the student their
+            result. Written answers aren&apos;t marked automatically; they are kept with the quiz.
+          </li>
+          <li>
             To keep a student&apos;s notes and bookmarks for them. Teachers and other students never see them; a parent who downloads a
             copy of their child&apos;s data gets them too, like everything else we hold about the child.
           </li>
           <li>
             To show a verified teacher how each pupil in their class is doing on the work the teacher set (not done, started, done). Teachers
-            see nothing else of a pupil&apos;s learning.
+            see nothing else of a pupil&apos;s learning, unless a parent shares a progress update with them in a message.
+          </li>
+          <li>
+            To let parents and their children&apos;s verified teachers write to each other about a child, share progress updates,
+            and read class announcements, with new ones shown straight away. The live updates only say that something new
+            arrived; the message itself is fetched with the usual checks.
           </li>
           <li>To let parents manage their children&apos;s accounts, and admins verify teachers.</li>
+          <li>
+            To show parents how their own children are doing: courses and progress, quiz results, work set by teachers,
+            learning time, recent activity, badges and certificates, and a learning report to download (PDF). Parents don&apos;t
+            see their children&apos;s quiz answers or notes on these pages (the data copy has everything). To apply the parental
+            controls a parent sets.
+          </li>
           <li>To keep accounts secure: spotting repeated wrong passwords, ending sessions, checking who made important changes.</li>
           <li>
             To send emails you need: confirming your address, resetting a password, confirming an email change, and security
@@ -140,7 +163,10 @@ export const privacySections: LegalSection[] = [
       <ul>
         <li>Show adverts, or use anyone&apos;s information for advertising.</li>
         <li>Sell, rent or trade personal information.</li>
-        <li>Give children a public profile, or let them message people they don&apos;t know. Lumina has no chat.</li>
+        <li>
+          Give children a public profile, or let them message anyone. Children have no chat on Lumina: only parents and their
+          children&apos;s verified teachers can write to each other, and children don&apos;t see those messages.
+        </li>
         <li>Build profiles of children for anything other than their learning on Lumina.</li>
       </ul>
     ),
@@ -166,7 +192,8 @@ export const privacySections: LegalSection[] = [
         <p>
           Parents and guardians manage their children&apos;s accounts under <em>My children</em>: see each account, change how
           it signs in, download a copy of the information we hold about the child, and delete the child&apos;s account (which
-          deletes it straight away). To correct information, or to stop us collecting more without deleting the account, email{" "}
+          deletes it straight away). Each child&apos;s page shows their learning and lets a parent set controls; every parent
+          or guardian linked to the child sees the same page. To correct information, or to stop us collecting more without deleting the account, email{" "}
           <EmailLink email={contacts.privacy} />. We answer within {legalConfig.responseTimes.privacyRequestDays} days and
           first check that you are the child&apos;s parent or guardian.
         </p>
@@ -209,6 +236,8 @@ export const privacySections: LegalSection[] = [
           rows={[
             ["Your account and its details", "Until you delete the account (or ask us to), then deleted straight away"],
             ["A child's learning progress", "Until the child's account is deleted, then deleted with it"],
+            ["Messages between parents and teachers about a child", "Until the child's or the teacher's account is deleted, then deleted with it"],
+            ["Class announcements", "Until the teacher removes them, or the class or the teacher's account is deleted"],
             ["Receipts of progress reports (so a report sent twice counts once)", "7 days"],
             ["Sign-in on a device", `Ends after ${d(SESSION_SECONDS)} without use, ${d(CLASSROOM_SESSION_SECONDS)} after a class-code sign-in, or when you sign out`],
             ["Email links (confirm, reset, change)", `${d(TOKEN_SECONDS.password_reset)} to ${d(TOKEN_SECONDS.email_verification)}, then they stop working (removed a day or so later)`],

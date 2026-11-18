@@ -45,6 +45,13 @@ const nextConfig: NextConfig = {
     SITE_URL,
     SITE_NOINDEX,
   },
+  async redirects() {
+    return [
+      // The formula library moved inside its subject (it is not a top-level section).
+      { source: "/formulas", destination: "/subjects/mathematics/formulas", permanent: true },
+      { source: "/formulas/:subject/:formula", destination: "/subjects/:subject/formulas/:formula", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

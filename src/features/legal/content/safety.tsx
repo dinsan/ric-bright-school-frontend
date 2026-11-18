@@ -26,7 +26,9 @@ export const safetySections: LegalSection[] = [
     content: (
       <ul>
         <li>
-          <strong>No chat, no public profiles.</strong> Children can&apos;t message anyone on Lumina, and nobody can look them up.
+          <strong>No chat for children, no public profiles.</strong> Children can&apos;t message anyone on Lumina, and nobody can look
+          them up. Parents can write to their child&apos;s verified teachers (and teachers to parents) about the child; children
+          don&apos;t see those messages.
         </li>
         <li>
           <strong>No adverts, no tracking.</strong> Nothing on Lumina tries to sell to children or follow them around the internet.

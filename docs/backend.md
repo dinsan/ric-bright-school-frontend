@@ -83,6 +83,9 @@ Tables:
 | `oauth_accounts` (`OAuthAccount`) | Linked Google / Microsoft / Apple identities |
 | `classes`, `class_members` (`Class`, `ClassMember`) | A teacher's classes and their students (class codes for picture sign-in) |
 | `subjects`, `courses`, `lessons` (`Subject`, `Course`, `Lesson`) | The catalog; only `published` courses (and their lessons) are public. Courses and lessons have a generated, weighted full-text `search_vector` |
+| `practice_strands`, `practice_topics`, `practice_skills`, `practice_skill_prerequisites`, `practice_problems` (`PracticeStrand`, `PracticeTopic`, `PracticeSkill`, `PracticeSkillPrerequisite`, `PracticeProblem`) | Practice content per subject and grade (mathematics first): strands run across Grades 1–12, a topic belongs to one grade (`grade_level`, checked 1–12) and one strand of the same subject (composite foreign key), skills are what students practise (draft / published / archived), problems are a skill's question bank (quiz question JSON, difficulty 1–3, hints, worked solution). One set of tables for every grade, not a table per grade |
+| `practice_sessions`, `practice_answers`, `practice_skill_progress` (`PracticeSession`, `PracticeAnswer`, `PracticeSkillProgress`) | A student's practice: each sitting on a skill, each problem answered in it (a deleted problem leaves the answer, unlinked), and mastery 0–100 per skill. Deleted with the student |
+| `formulas`, `formula_skills`, `formula_related` (`Formula`, `FormulaSkill`, `FormulaRelated`) | The formula library, by subject (mathematics first): name, LaTeX notation, `expression` (the equation the formula engine solves; null for reference formulas), variables / steps / worked examples (JSON, shapes in `src/features/formulas/formula.ts`), the grade range it applies to (1–12, both set or neither), a generated, weighted full-text `search_vector` like courses and lessons, which practice skills use it, and a "see also" graph between formulas (a row each way). Seeded from `scripts/data/formulas.json` |
 | `audit_events` (`AuditEvent`) | Admin actions, impersonation, password/email/MFA changes, deletions |
 | `rate_limits` (`RateLimit`) | Fixed-window counters shared by every server instance |
 
@@ -148,8 +151,8 @@ either: keep them in mind when you change the tables they belong to.
 | What | Where |
 | --- | --- |
 | `CREATE EXTENSION pg_trgm` | Trigram indexes for typo-tolerant search |
-| `CHECK` constraints | Lower-case emails and usernames, grades 1–12, lesson position and duration |
-| Generated `search_vector` columns (`GENERATED ALWAYS AS … STORED`) | `schema.prisma` declares them `Unsupported("tsvector")` with the generation expression as `@default(dbgenerated(…))`, which tells Prisma the column is computed. If you change the expression, change both. Prisma Client doesn't read or write these columns; search uses raw SQL |
+| `CHECK` constraints | Lower-case emails and usernames, grades 1–12, lesson position and duration; practice: grade 1–12, difficulty 1–3, mastery 0–100, right answers ≤ answers, JSON shapes (`20261117100000_practice_skills`); formula library: grade range 1–12 (both set or neither), JSON shapes, not related to itself (`20261117163000_formula_library`), expression not blank (`20261118090000_formula_expression`) |
+| Generated `search_vector` columns (`GENERATED ALWAYS AS … STORED`; courses, lessons, formulas) | `schema.prisma` declares them `Unsupported("tsvector")` with the generation expression as `@default(dbgenerated(…))`, which tells Prisma the column is computed. If you change the expression, change both. Prisma Client doesn't read or write these columns; search uses raw SQL |
 | `NOT NULL` on `teacher_profiles.subjects` / `grade_levels` | Prisma can't mark list columns required |
 
 ### Databases created before Prisma
@@ -162,6 +165,29 @@ resolve --applied`) and drops the `drizzle` bookkeeping schema (`scripts/lib/mig
 not all Drizzle migrations were applied is refused with a message; recreate it (development data only). The API
 tests simply recreate their own database. What changed in the move, and how it was verified:
 [`prisma-migration.md`](prisma-migration.md).
+
+## The formula engine (a service the server calls)
+
+The formula calculator and the drawing of maths come from the **formula engine**, a separate Python service
+(`services/formula-engine`, its own README, Dockerfile and tests) reached over HTTP at `FORMULA_ENGINE_URL`, with
+`FORMULA_ENGINE_KEY` as a bearer key. Only the server calls it (`src/server/formulas/engine.ts`); browsers never do.
+
+- `solveFormula` → `POST /v1/solve`. The engine's 422 errors become the app's (same code and message), with the field
+  it names mapped into the request (`values.r` → `body.values.r`, so the calculator shows it next to the box). An engine
+  that can't be reached, refuses the key or fails is 503 `calculator_unavailable`; busy is 503 `calculator_busy`; too
+  slow is 422 `calculation_timeout`.
+- `renderLatex` → `POST /v1/render` (batches of 50). Never throws: without the engine the pages show LaTeX. Results are
+  cached in memory (LaTeX → tree never changes); worked examples' working is cached per formula version in the service.
+- Every MathML tree is checked against the allowlist (`parseMathTree`, `src/features/formulas/math-tree.ts`) before use.
+- Don't pass `cache: "no-store"` to these `fetch` calls: the formula pages are ISR, and an explicit no-store fetch turns
+  them dynamic, which Next.js refuses in production ("Page changed from static to dynamic at runtime").
+
+The library is reached inside its subject: `/subjects/{subject}/formulas` and `/subjects/{subject}/formulas/{formula}`
+(the API keeps `/api/formulas…` with the subject as a parameter).
+
+Adding a formula: add it to `scripts/data/formulas.json` (the seed validates it with the app's shapes), then run the
+engine's tests (`make engine-test`): they parse it, solve every worked example and compare with the answers you wrote
+(work them out independently), and render its notation and steps.
 
 ## Adding an endpoint
 
@@ -233,7 +259,20 @@ tests simply recreate their own database. What changed in the move, and how it w
 serialized per student and course (`select … for update` on the enrolment). How the browser side uses it, with
 every endpoint: README, "Student experience".
 Learning paths and recommendations: `paths.ts`; the review queue: `review.ts`; assigned work as students see it:
-`assignments.ts`. Teachers set the work through `src/server/teaching/service.ts` behind `/api/teach`.
+`assignments.ts`; quizzes and attempts (`quizzes`, `quiz_attempts`; marking shared with the browser in
+`src/features/learn/quiz.ts`): `quizzes.ts`. Parents' view of their children (dashboard, child page, PDF report) and parental controls:
+`src/server/family/progress.ts`, `report-pdf.ts`, `controls.ts` (README, "Parent experience").
+
+## Live updates
+
+`src/server/realtime/hub.ts`: PostgreSQL `LISTEN`/`NOTIFY` carries small events ("a message in conversation X")
+to every server instance; each process keeps one listening connection (created on first use, shared through
+`globalThis`, reconnecting with backoff) and forwards events to the users' open Server-Sent Events streams
+(`GET /api/me/events`). Publish with `publish(tx, userIds, event)` inside the transaction that makes the change, so
+events go out on commit only. Events never carry content: browsers refetch it through the checked endpoints. Used by
+messages and announcements (`src/server/messages/`, README "Parents and teachers talking"). The listening
+connection counts towards the database's connections (one per server process); API tests close it in
+`tests/support/setup.ts`. Teachers set the work through `src/server/teaching/service.ts` behind `/api/teach`.
 
 ## Tests
 

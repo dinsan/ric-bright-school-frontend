@@ -2,7 +2,8 @@
 #
 #   docker compose up
 #
-# and open http://localhost:3000 (emails the app sends: http://localhost:8025). Nothing to configure:
+# and open http://localhost:3000 (emails the app sends: http://localhost:8025; the formula engine's API:
+# http://localhost:8000/docs). Nothing to configure:
 # the database is created, migrated and filled with sample courses and demo accounts, and the app runs
 # `next dev` on your checkout, so saving a file reloads the page. Demo sign-ins are printed in the log.
 #
@@ -45,6 +46,31 @@ services:
       - "127.0.0.1:${MAIL_SMTP_PORT:-1025}:1025"
     restart: unless-stopped
 
+  # The formula engine (services/formula-engine, Python): the formula calculator, and maths drawn as
+  # MathML. Hot reload on your checkout; its tests: `make engine-test`.
+  formula-engine:
+    build:
+      context: ./services/formula-engine
+      target: dev
+    image: lumina-formula-engine-dev
+    init: true
+    environment:
+      # The app's formula catalog, for the engine's catalog tests (every worked example solved and checked).
+      FORMULA_CATALOG: /catalog/formulas.json
+    volumes:
+      - ./services/formula-engine:/app
+      - ./scripts/data:/catalog:ro
+    ports:
+      # Only on this machine: for `npm run dev` outside Docker (FORMULA_ENGINE_URL=http://localhost:8000).
+      - "127.0.0.1:${ENGINE_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -58,6 +84,7 @@ services:
       SMTP_URL: smtp://mail:1025
       MAIL_FROM: "Lumina <no-reply@lumina.local>"
       APP_URL: http://localhost:${APP_PORT:-3000}
+      FORMULA_ENGINE_URL: http://formula-engine:8000
       # AUTH_SECRET is not needed in development (a development secret is used).
       SEED_ON_START: ${SEED_ON_START:-true}
       # Hot reload relies on file-change events; if they don't reach the container (some Windows and
@@ -87,6 +114,9 @@ services:
       db:
         condition: service_healthy
       mail:
+        condition: service_started
+      # Not "healthy": the app works without the engine (formulas shown as LaTeX, calculator unavailable).
+      formula-engine:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]

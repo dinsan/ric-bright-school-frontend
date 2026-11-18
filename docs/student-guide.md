@@ -1,6 +1,6 @@
 # Lumina for students: a simple guide
 
-How to use notes and bookmarks, streaks, points, badges and certificates. Written for students, and for the
+How to use notes and bookmarks, quizzes, streaks, points, badges and certificates. Written for students, and for the
 parents and teachers who help them. (Developers: the technical side is in the README, "Student experience".)
 
 To try everything with the demo account: go to `/sign-in/student`, username **leo10**, password
@@ -56,7 +56,7 @@ Your home page (**Home** in the menu) shows how you are doing:
 | --- | --- |
 | **XP (points)** | 10 XP for every lesson you finish, 50 XP for every course you finish |
 | **Level** | Level 2 at 100 XP; each next level needs 50 XP more than the last. The bar shows how close you are |
-| **Streak** (the flame) | Learn something every day: open or finish a lesson, or do your review. Today still counts until the day ends |
+| **Streak** (the flame) | Learn something every day: open or finish a lesson, do your review, or finish a quiz. Today still counts until the day ends |
 | **Badges** | 10 badges, such as **First step** (finish your first lesson), **On a roll** (3 days in a row), **Course champion** (finish a course), **Note taker** (write 5 notes) |
 
 - See every badge in **Achievements → Badges**. Badges you haven't earned yet are grey with a lock, and each one
@@ -81,13 +81,47 @@ course later, you keep its certificate. Certificates are private: only you can s
 
 ---
 
+## 6. Quizzes: show what you know
+
+Some courses have quizzes. You find them on your course's page (**My courses**, then the course), under
+**Quizzes**. Start the course first; then press a quiz to open it.
+
+1. The first screen says how many questions there are, and whether you see them **one at a time** or **all on
+   one page** (your teacher or the course decides). Press **Start the quiz**.
+2. Answer the questions. Some ask you to choose one answer, some to choose all the right ones, to type a word or a
+   number, to fill in blanks in a sentence, to match things, or to put things in order (use the **up** and
+   **down** arrows next to each one). Numbers can be typed like **12**, **2.5** or **3/4**.
+3. Not sure? Press **Flag for review**. The question gets a little flag, so you can find it again.
+4. The numbered squares at the top (**Questions**) show every question: **filled in** when you answered it,
+   **dashed** when you haven't yet, and a **flag** when you flagged it. Press a number to go to that question.
+5. When you're ready, press **Finish quiz**. Lumina shows which questions you haven't answered and which you
+   flagged, so you can go back to them. Press **Keep working** to go back, or **Finish and submit** when you're sure.
+   After that your answers can't be changed.
+
+- Your answers are **saved as you go** ("Saved" next to the numbers). If you close the quiz or your internet
+  drops, open it again and carry on where you stopped.
+- You see your score straight away. Written answers (where you explain in your own words) aren't marked by the
+  computer, so they aren't in your score yet.
+- You can take a quiz again: press **Take the quiz again**.
+
+## Time for a break?
+
+Your parent can choose how long you learn each day, and a bedtime. When you reach it, Lumina shows a message.
+Sometimes it's just a reminder ("Time for a break?") and you can carry on; sometimes lessons and quizzes take a
+break until tomorrow (or until bedtime is over). Don't worry: everything you did is saved.
+
 ## For parents
 
+- Your dashboard shows each child's progress, quiz results and activity; you can download a report and set
+  learning-time controls, and talk with teachers. How: [`parent-guide.md`](parent-guide.md).
 - **Download their data** (under **My children**) gives you a copy of everything Lumina stores about your child,
-  including their notes, bookmarks, badges and certificates.
+  including their notes, bookmarks, quiz answers and marks, badges, certificates and the controls you set.
 - Notes and bookmarks are never shown to teachers or to other students.
 
 ## For teachers
 
+- How to write to parents and send class announcements: [`teacher-guide.md`](teacher-guide.md).
+
 - Teachers see whether each pupil has done the work the teacher set (not started, started, done), and nothing
-  else of their learning: not their notes, bookmarks, badges or certificates.
+  else of their learning: not their notes, bookmarks, quiz answers, badges or certificates, unless a parent shares
+  a progress update with them in a message. (Marking written quiz answers is planned.)

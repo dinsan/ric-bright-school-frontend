@@ -7,7 +7,8 @@
 # file next to this one, which Compose reads automatically:
 #   echo "AUTH_SECRET=$(openssl rand -base64 48)" >> .env
 #
-# Services: db (PostgreSQL 16) -> migrate (applies migrations, then exits) -> web (the app on :3000).
+# Services: db (PostgreSQL 16) -> migrate (applies migrations, then exits) -> web (the app on :3000);
+# formula-engine (the formula calculator, Python) next to web.
 # Sample data and demo accounts: docker compose -f compose.prod.yaml run --rm migrate npm run db:seed
 # Its own project (and database volume), separate from the development stack.
 name: lumina-prod
@@ -40,6 +41,16 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # The formula engine (services/formula-engine): not published, only the web app reaches it. Set
+  # ENGINE_API_KEY in .env to make it require a key (the web app sends it): recommended.
+  formula-engine:
+    build:
+      context: ./services/formula-engine
+      target: runtime
+    environment:
+      ENGINE_API_KEY: ${ENGINE_API_KEY:-}
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -52,6 +63,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET, for example in .env - see the top of compose.prod.yaml}
       # The address people open the app on: used in emails, redirects and the social sign-in callback.
       APP_URL: ${APP_URL:-http://localhost:3000}
+      FORMULA_ENGINE_URL: http://formula-engine:8000
+      FORMULA_ENGINE_KEY: ${ENGINE_API_KEY:-}
       # Without SMTP_URL, emails (sign-up links, password resets) are printed to the log: docker compose -f compose.prod.yaml logs web
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-Lumina <no-reply@lumina.local>}
@@ -68,6 +81,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      formula-engine:
+        condition: service_started
     ports:
       - "${WEB_PORT:-3000}:3000"
     restart: unless-stopped
