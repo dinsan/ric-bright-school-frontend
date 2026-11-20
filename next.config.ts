@@ -50,6 +50,9 @@ const nextConfig: NextConfig = {
       // The formula library moved inside its subject (it is not a top-level section).
       { source: "/formulas", destination: "/subjects/mathematics/formulas", permanent: true },
       { source: "/formulas/:subject/:formula", destination: "/subjects/:subject/formulas/:formula", permanent: true },
+      // Help moved to the public help centre, so it can be read before signing in.
+      { source: "/learn/help", destination: "/help/students", permanent: true },
+      { source: "/family/help", destination: "/help/parents", permanent: true },
     ];
   },
   async headers() {

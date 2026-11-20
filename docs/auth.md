@@ -20,7 +20,7 @@ signed-in devices all need the server to end a session immediately.
 - **Sliding expiry**: standard sessions last 30 days and are extended to 30 days again when used in their
   second half. Server Components can't set cookies, so the proxy (`src/proxy.ts`) renews the cookie's
   lifetime on page loads; the database row remains the authority.
-- **Kinds**: `standard`; `classroom` (picture sign-in on a shared device: one school day, not extended);
+- **Kinds**: `standard`; `shared_device` (picture sign-in with a family code on a shared device: 8 hours, not extended);
   `impersonation` (an admin viewing as someone: one hour, not extended, marked with the admin's id).
 - **Ending sessions** deletes rows: sign out, "sign out everywhere else", a password change or reset (all
   other sessions), an admin turning an account off or changing its role (all sessions), deleting the account.
@@ -62,26 +62,48 @@ access and refresh tokens that this app relayed.
 
 ## Flows
 
-- **Sign in** (`/sign-in`): email + password for parents, teachers, admins; MFA step (authenticator or
-  recovery code) when switched on; Google / Microsoft / Apple for configured providers; "Confirm your email
-  first" with resend. After sign-in: the page asked for (`?next=`, same-site paths only) or the role's home.
-  Students get the reading level of their grade.
-- **Students**: `/sign-in/student` (username + password) or `/sign-in/class`: class code → "Who are you?"
-  → tap 3 pictures (submits after the third; progress shown as dots, never the pictures; lock message
-  after too many tries). A classroom device can remember the class code. Always in the Grades 1–5 look.
-- **Sign up** (`/sign-up`): parent or teacher, then "check your email"; `/verify-email?token=` confirms and
-  signs in (unless the account already uses two-step verification). With Google / Microsoft / Apple, the role
-  chosen in the form is used and the provider must confirm the email address.
+- **Separate sign-in for students and parents.** `/sign-in` asks "Who's signing in?" and offers two doors
+  (and a quiet link for staff). Each door only lets in its own kind of account (`portalRoles` in
+  `src/features/auth/contract.ts`, checked by `assertPortal` in `src/server/auth/sign-in.ts`):
+
+  | Page | Who | How |
+  | --- | --- | --- |
+  | `/sign-in/student` | students | username + password; or pictures (`/sign-in/pictures`) |
+  | `/sign-in/parent` | parents and guardians | email + password, Google / Microsoft / Apple |
+  | `/sign-in/staff` | admins | email + password, Google / Microsoft / Apple |
+
+  The right password on the wrong page is refused with 403 `wrong_portal`; `details[0]` is
+  `{ field: "portal", message: "student" | "parent" | "staff" }`, and the form shows "This is a parent
+  account" with a button to the right page. Nobody is signed in, so nobody lands in the other side's area.
+  Signed-out visitors of `/learn`, `/family` and `/admin` go straight to their area's page (`portalForPath`);
+  `/account` (shared) goes to the chooser. After sign-in: the page asked for (`?next=`, same-site paths
+  only) or the role's home (`/learn` or `/family`). Students get the reading level of their grade.
+- **Email sign-in** (parent and staff pages): `POST /api/auth/login` with `{ email, password, portal }`;
+  MFA step (authenticator or recovery code) when switched on; "Confirm your email first" with resend.
+- **Students**: `/sign-in/student` (username + password, `POST /api/auth/login/username`, students only) or
+  `/sign-in/pictures`: the parent's **family code** → "Who are you?" (that parent's children whose sign-in uses
+  pictures) → tap 3 pictures (submits after the third; progress shown as dots, never the pictures; lock message
+  after too many tries). `GET /api/auth/family/{code}` answers the roster, `POST /api/auth/login/pictures` takes
+  `{ family_code, student_id, pictures }`; a child of another family, or a turned-off parent's code, doesn't work.
+  A family's shared device can remember the code (`lumina:family-code`). Always in the Grades 1–5 look.
+- **Family code**: a parent makes one under My children (`GET` / `POST /api/me/family-code`): 6 characters
+  without look-alikes, unique, upper-case; making a new one stops the old one at once. Not while an admin views as
+  the parent. Only parent accounts can have one (a database CHECK; an admin changing the role clears it).
+- **Sign up** (`/sign-up`): **parents only**, then "check your email"; `/verify-email?token=` confirms and
+  signs in (unless the account already uses two-step verification). Students get their accounts from a
+  parent (My children). A `role` in the request is ignored. With Google / Microsoft / Apple, sign-up makes a
+  parent account and the provider must confirm the email address.
 - **Passwords**: `/forgot-password` always gives the same answer (no account enumeration);
   `/reset-password?token=` sets a new password, signs out every device and confirms the email.
-- **Account** (`/account`, `/account/security`): profile, language, time zone, teacher profile, display
+- **Account** (`/account`, `/account/security`): profile, language, time zone, display
   settings, parent link code (students), password, email change (`/confirm-email?token=`), two-step
   verification (QR drawn locally, recovery codes shown once, regenerate, turn off), linked Google / Microsoft
   / Apple accounts, sessions (sign out one / all others), delete account (not for students).
 - **Families** (`/family`, `/family/children`): add a child (parental consent, recorded), choose how the
-  child signs in (username + password, or username + 3 pictures), link a student account with the code the
-  student makes, switch the active child from the top bar.
-- **Admin** (`/admin/users`): search (URL state), role changes, turn accounts off/on, verify teachers,
+  child signs in (username + password, or username + 3 pictures with the family code), the family code, link a
+  student account with the code the student makes, switch the active child from the top bar. A child's goals
+  and controls: [`parent-experience.md`](parent-experience.md).
+- **Admin** (`/admin/users`): search (URL state), role changes (student, parent, admin), turn accounts off/on,
   reset MFA, view as a user (banner, "Stop viewing" restores the admin session; admins can't view as
   admins or act on themselves). Every action is written to `audit_events`.
 - **Session ends** (signed out elsewhere, expired, turned off): pages go through `/auth/resume`, which
@@ -96,8 +118,8 @@ access and refresh tokens that this app relayed.
    argon2 check), and only says "confirm your email" (403 `email_not_verified`) or "turned off"
    (403 `account_disabled`) after a correct password.
 2. **Lockouts.** 10 wrong passwords in a row lock the account for 15 minutes (429 `too_many_attempts`);
-   5 wrong picture sets lock picture sign-in (423 `account_locked`, "ask your teacher"); 5 wrong codes end
-   the MFA step. Per-IP rate limits on top (sign-in, class codes, emails, link codes).
+   5 wrong picture sets lock picture sign-in (423 `account_locked`, "ask a grown-up"); 5 wrong codes end
+   the MFA step. Per-IP rate limits on top (sign-in, family codes, emails, link codes).
 3. **One-time links** (email verification 48 h, password reset 1 h, email change 24 h, parent link code
    7 days) are stored hashed and consumed atomically: a link works once, even under concurrent requests.
    Only the newest link of each kind works.
@@ -110,8 +132,13 @@ access and refresh tokens that this app relayed.
    verification, linked accounts, account deletion): 403 `impersonation_restricted`.
 7. **OAuth** never links to an existing account just because the email matches (that would let whoever
    controls the provider account take the Lumina account). Linking is done from Sign-in and security while
-   signed in. Sign-in with an unlinked identity goes to `/sign-in?error=oauth_no_account`; sign-up with an
-   email that already has an account to `?error=oauth_email_taken`.
+   signed in. Signing in names the page it started from (`portal=parent|staff`, kept in the OAuth state);
+   an account that belongs elsewhere goes back with `?error=wrong_portal_parent|wrong_portal_staff`. Problems
+   go back to that page: an unlinked identity to `/sign-in/parent?error=oauth_no_account`; sign-up with an
+   email that already has an account to `?error=oauth_email_taken`; the MFA step to `?step=mfa`.
+9. **Separate doors** (see Flows): email sign-in needs `portal`; the account's role must belong to it, checked
+   only after the password (or the provider) proved who it is, so a wrong page reveals nothing to someone
+   guessing.
 8. **Field errors** come as `details[].field` = `body.<field>` (e.g. `body.email`, `body.current_password`,
    `body.username`, `body.code`), and the forms show them next to the field.
 

@@ -107,3 +107,14 @@ lines in `tests/components/catalog.test.tsx`. The rest is tracked in FE-DS-11.
 - App shell: the drawer lists the role's navigation with the current item marked; **R** it closes when the window grows to desktop.
 - **R** Courses: a page number past the end (`?page=99`) says so and offers the last page, instead of "No courses yet".
 - Every page: no horizontal scrolling at 360, 768 and 1280px in every theme and grade band; no axe violations (WCAG 2.2 AA + best practice).
+
+## Help (`HelpButton`, `HelpPanel`, `HelpPage`, `HelpCentreSearch`)
+
+- The **?** button is in every header: public pages (right after **Search**), sign-in pages, the app shell for students, parents and staff, and lessons, quizzes and review. The public header still fits in one row at 320px.
+- It opens the audience's help ("Getting started with Lumina", "Help for students", "Help for parents", "Help for staff") with the search box focused, also while the topics are still loading; "Help for this page" lists the topics for the current path, most specific first.
+- Signed in, each person only sees their own topics. On public and sign-in pages, search covers all help, and topics written for someone else say who they are for; links to the other audiences' help are listed.
+- The `?` key opens it, except while typing in a field.
+- Opening a topic moves focus to its heading; **Back** returns to the list and focus goes back to the topic's button.
+- Search says how many topics match (a status message), and what to do when none do.
+- Following a link in a topic closes the panel; it opens at the list again next time. A parent's links go to the child they're looking at (on the help centre: their chosen child, when signed in), or to **My children** if there is none.
+- The help centre searches every audience's help, each result opening on its audience's page; a help page opens the topic named in the address (`#help-…`), also when a link on the same page changes it. The account menu's **Help** goes to the role's page in the help centre.

@@ -74,18 +74,19 @@ Tables:
 
 | Table (model) | What |
 | --- | --- |
-| `users` (`User`) | Every account (role, name, email/username, password and picture hashes, MFA, lockout, parent's active child) |
-| `teacher_profiles` (`TeacherProfile`) | School, subjects, grades, bio, verification by an admin |
+| `users` (`User`) | Every account: role (student, parent or admin), name, email/username, password and picture hashes, MFA, lockout, a parent's active child and family code |
 | `guardianships` (`Guardianship`) | Parent ↔ child, with the time consent was given |
 | `sessions` (`Session`) | Server-side sessions (hashed token, kind, device, IP, expiry, impersonating admin) |
 | `auth_tokens` (`AuthToken`) | One-time tokens: email verification, password reset, email change, MFA step, parent link codes, OAuth state |
 | `recovery_codes` (`RecoveryCode`) | MFA recovery codes (hashed, single use) |
 | `oauth_accounts` (`OAuthAccount`) | Linked Google / Microsoft / Apple identities |
-| `classes`, `class_members` (`Class`, `ClassMember`) | A teacher's classes and their students (class codes for picture sign-in) |
 | `subjects`, `courses`, `lessons` (`Subject`, `Course`, `Lesson`) | The catalog; only `published` courses (and their lessons) are public. Courses and lessons have a generated, weighted full-text `search_vector` |
 | `practice_strands`, `practice_topics`, `practice_skills`, `practice_skill_prerequisites`, `practice_problems` (`PracticeStrand`, `PracticeTopic`, `PracticeSkill`, `PracticeSkillPrerequisite`, `PracticeProblem`) | Practice content per subject and grade (mathematics first): strands run across Grades 1–12, a topic belongs to one grade (`grade_level`, checked 1–12) and one strand of the same subject (composite foreign key), skills are what students practise (draft / published / archived), problems are a skill's question bank (quiz question JSON, difficulty 1–3, hints, worked solution). One set of tables for every grade, not a table per grade |
 | `practice_sessions`, `practice_answers`, `practice_skill_progress` (`PracticeSession`, `PracticeAnswer`, `PracticeSkillProgress`) | A student's practice: each sitting on a skill, each problem answered in it (a deleted problem leaves the answer, unlinked), and mastery 0–100 per skill. Deleted with the student |
 | `formulas`, `formula_skills`, `formula_related` (`Formula`, `FormulaSkill`, `FormulaRelated`) | The formula library, by subject (mathematics first): name, LaTeX notation, `expression` (the equation the formula engine solves; null for reference formulas), variables / steps / worked examples (JSON, shapes in `src/features/formulas/formula.ts`), the grade range it applies to (1–12, both set or neither), a generated, weighted full-text `search_vector` like courses and lessons, which practice skills use it, and a "see also" graph between formulas (a row each way). Seeded from `scripts/data/formulas.json` |
+| Learning (`enrollments`, `lesson_progress`, `learning_days`, `progress_receipts`, `student_badges`, `certificates`, `course_prerequisites`, `review_items`, `lesson_notes`, `lesson_bookmarks`, `quizzes`, `quiz_attempts`) | A student's own learning: see [`student-experience.md`](student-experience.md), "Data about students" |
+| `parental_controls` (`ParentalControls`) | A child's daily learning-time limit and bedtime, set by a parent |
+| `learning_goals`, `goal_achievements` (`LearningGoal`, `GoalAchievement`) | Goals a parent sets for a child (weekly minutes, days or lessons; finishing a course by a day; a quiz score) and each time one was met (once per week or once). Progress is never stored: it is worked out from the learning tables by `src/features/goals/rules.ts` |
 | `audit_events` (`AuditEvent`) | Admin actions, impersonation, password/email/MFA changes, deletions |
 | `rate_limits` (`RateLimit`) | Fixed-window counters shared by every server instance |
 
@@ -151,9 +152,8 @@ either: keep them in mind when you change the tables they belong to.
 | What | Where |
 | --- | --- |
 | `CREATE EXTENSION pg_trgm` | Trigram indexes for typo-tolerant search |
-| `CHECK` constraints | Lower-case emails and usernames, grades 1–12, lesson position and duration; practice: grade 1–12, difficulty 1–3, mastery 0–100, right answers ≤ answers, JSON shapes (`20261117100000_practice_skills`); formula library: grade range 1–12 (both set or neither), JSON shapes, not related to itself (`20261117163000_formula_library`), expression not blank (`20261118090000_formula_expression`) |
+| `CHECK` constraints | Lower-case emails and usernames, grades 1–12, lesson position and duration; family codes upper-case and parents only, goal targets per kind and which of course / quiz / due day each kind needs (`20261118120000_self_study`); practice: grade 1–12, difficulty 1–3, mastery 0–100, right answers ≤ answers, JSON shapes (`20261117100000_practice_skills`); formula library: grade range 1–12 (both set or neither), JSON shapes, not related to itself (`20261117163000_formula_library`), expression not blank (`20261118090000_formula_expression`) |
 | Generated `search_vector` columns (`GENERATED ALWAYS AS … STORED`; courses, lessons, formulas) | `schema.prisma` declares them `Unsupported("tsvector")` with the generation expression as `@default(dbgenerated(…))`, which tells Prisma the column is computed. If you change the expression, change both. Prisma Client doesn't read or write these columns; search uses raw SQL |
-| `NOT NULL` on `teacher_profiles.subjects` / `grade_levels` | Prisma can't mark list columns required |
 
 ### Databases created before Prisma
 
@@ -209,7 +209,7 @@ engine's tests (`make engine-test`): they parse it, solve every worked example a
 - **Rate limits** key on the client IP from `X-Forwarded-For` (or `X-Real-IP`). Run the app behind a proxy or load
   balancer that sets it (and strips values sent by clients); otherwise per-IP limits can be sidestepped. Without
   either header the per-IP limits are skipped rather than shared by every visitor (which would let one busy
-  classroom lock out the whole site). Per-account lockouts don't depend on the IP.
+  school or library network lock out the whole site). Per-account lockouts don't depend on the IP.
 - **Audit**: `audit_events` records admin actions and security changes; there is no viewer yet (FE-ADM-02).
 - **Headers**: `next.config.ts` sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`;
   CSP and HSTS are still to do (FE-SEC-01).
@@ -257,22 +257,24 @@ engine's tests (`make engine-test`): they parse it, solve every worked example a
 `src/server/learning/service.ts` behind `/api/learn`: enrolments, lesson content and progress, badges, certificates
 (PDF in `certificate-pdf.ts`). Progress reports are idempotent (report ids recorded in `progress_receipts`) and
 serialized per student and course (`select … for update` on the enrolment). How the browser side uses it, with
-every endpoint: README, "Student experience".
-Learning paths and recommendations: `paths.ts`; the review queue: `review.ts`; assigned work as students see it:
-`assignments.ts`; quizzes and attempts (`quizzes`, `quiz_attempts`; marking shared with the browser in
+every endpoint: [`student-experience.md`](student-experience.md).
+Learning paths and recommendations: `paths.ts`; the review queue: `review.ts`; quizzes and attempts (`quizzes`, `quiz_attempts`; marking shared with the browser in
 `src/features/learn/quiz.ts`): `quizzes.ts`. Parents' view of their children (dashboard, child page, PDF report) and parental controls:
-`src/server/family/progress.ts`, `report-pdf.ts`, `controls.ts` (README, "Parent experience").
+`src/server/family/progress.ts`, `report-pdf.ts`, `controls.ts` ([`parent-experience.md`](parent-experience.md)).
 
-## Live updates
+## Goals
 
-`src/server/realtime/hub.ts`: PostgreSQL `LISTEN`/`NOTIFY` carries small events ("a message in conversation X")
-to every server instance; each process keeps one listening connection (created on first use, shared through
-`globalThis`, reconnecting with backoff) and forwards events to the users' open Server-Sent Events streams
-(`GET /api/me/events`). Publish with `publish(tx, userIds, event)` inside the transaction that makes the change, so
-events go out on commit only. Events never carry content: browsers refetch it through the checked endpoints. Used by
-messages and announcements (`src/server/messages/`, README "Parents and teachers talking"). The listening
-connection counts towards the database's connections (one per server process); API tests close it in
-`tests/support/setup.ts`. Teachers set the work through `src/server/teaching/service.ts` behind `/api/teach`.
+`src/server/goals/service.ts` behind `/api/me/children/{id}/goals` (parents) and `/api/learn/goals` (the student).
+Goal progress is computed on every read from the child's learning with the pure rules in `src/features/goals/rules.ts`,
+in the child's days, so the child and the parent read identical numbers (an API test compares them). `checkGoals`
+runs inside the transactions that can meet a goal (a lesson progress report, a quiz submit; after a review answer)
+and records each goal met once in `goal_achievements` (`INSERT … ON CONFLICT DO NOTHING RETURNING`, keyed by goal
+and week), which is what the student's celebration and the parent's history read. Creating a goal locks the child's
+row, so the limit (5) and "one goal of each kind per course or quiz" hold under concurrent requests.
+
+There are no live updates (Server-Sent Events) any more: they only served parent–teacher messages, which are gone.
+Goal notifications for parents are planned (docs/self-study-plan.md, SS-30); the removed hub
+(`src/server/realtime/hub.ts`, PostgreSQL `LISTEN`/`NOTIFY`) is in git history if they need it.
 
 ## Tests
 
@@ -283,11 +285,12 @@ The `api` project creates `lumina_test` if needed, applies the migrations (`pris
 left over from the Drizzle version is recreated), and truncates every table before each test. Tests call the Route
 Handlers as the browser would, through `tests/support/browser.ts` (keeps cookies, sends the CSRF header), and read
 emails from the in-memory outbox (`tokenFromEmail`). Factories in `tests/support/factories.ts` create users,
-classes and a small catalog (with lessons) directly in the database.
+family codes and a small catalog (with lessons) directly in the database, and `loginBody(email)` builds the body
+the account's own sign-in page sends (with its `portal`).
 
 ```ts
 const browser = new Browser();
-await browser.call(login, { method: "POST", path: "/api/auth/login", body: { email, password: PASSWORD } });
+await browser.call(login, { method: "POST", path: "/api/auth/login", body: await loginBody(email) });
 const response = await browser.call(listChildren, { path: "/api/me/children" });
 expect(response.status).toBe(200);
 ```

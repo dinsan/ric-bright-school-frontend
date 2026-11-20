@@ -1,12 +1,36 @@
 # Lumina for students: a simple guide
 
-How to use notes and bookmarks, quizzes, streaks, points, badges and certificates. Written for students, and for the
-parents and teachers who help them. (Developers: the technical side is in the README, "Student experience".)
+How to sign in, follow your goals, and use notes and bookmarks, quizzes, streaks, points, badges and certificates.
+Written for students, and for the parents who help them. (Developers: the technical side is in [`student-experience.md`](student-experience.md).)
+
+**Signing in.** Students have their own sign-in page: on `/sign-in` choose **I'm a student** (or go
+straight to `/sign-in/student`) and type the username and password your parent set up for you. Do you use
+pictures? Press **Sign in with pictures**, type your family's code (your parent has it), press your name, then
+your three pictures in the right order. Your parent signs in on a different page and sees how you are doing, not
+your lessons.
 
 To try everything with the demo account: go to `/sign-in/student`, username **leo10**, password
 **lumina-demo-password**.
 
+**Need help?** Press the **?** button at the top of any page (or the **?** key on a keyboard). Lumina shows help
+for the page you're on first, and you can type what you need ("quiz", "notes", "streak"). Each answer tells you
+step by step what to press, and its button takes you straight there. All the help is on one page too: press your
+initial at the top right, then **Help** (`/help/students`). Can't sign in? The **?** button is on the sign-in
+pages too.
+
 ---
+
+## Your goals
+
+Your parent can set **goals** to help you do your best, like "Learn 1 hour a week", "Learn on 3 days a week" or
+"Finish Fractions Made Simple by Friday". You find them on your **Home** page and under **Goals** in the menu.
+
+- Each goal shows how far along you are ("40 of 60 minutes this week") and what's left ("20 more minutes by
+  Sunday"). It says **On track**, **Behind**, **Met** or **Missed**.
+- Your parent can add a little note to a goal. You see it with the goal.
+- Weekly goals start again every **Monday**. The past weeks show whether you met them.
+- When you meet a goal, Lumina says **Goal met!**
+- Press the button on a goal (**Keep learning**, **Open the course**, **Take the quiz**) to work on it.
 
 ## 1. Notes: write down what you want to remember
 
@@ -87,7 +111,7 @@ Some courses have quizzes. You find them on your course's page (**My courses**, 
 **Quizzes**. Start the course first; then press a quiz to open it.
 
 1. The first screen says how many questions there are, and whether you see them **one at a time** or **all on
-   one page** (your teacher or the course decides). Press **Start the quiz**.
+   one page** (the course decides). Press **Start the quiz**.
 2. Answer the questions. Some ask you to choose one answer, some to choose all the right ones, to type a word or a
    number, to fill in blanks in a sentence, to match things, or to put things in order (use the **up** and
    **down** arrows next to each one). Numbers can be typed like **12**, **2.5** or **3/4**.
@@ -100,8 +124,8 @@ Some courses have quizzes. You find them on your course's page (**My courses**, 
 
 - Your answers are **saved as you go** ("Saved" next to the numbers). If you close the quiz or your internet
   drops, open it again and carry on where you stopped.
-- You see your score straight away. Written answers (where you explain in your own words) aren't marked by the
-  computer, so they aren't in your score yet.
+- You see your score straight away. Written answers (where you explain in your own words) aren't marked, so
+  they aren't in your score: read them again and check them against the lesson.
 - You can take a quiz again: press **Take the quiz again**.
 
 ## Time for a break?
@@ -112,16 +136,8 @@ break until tomorrow (or until bedtime is over). Don't worry: everything you did
 
 ## For parents
 
-- Your dashboard shows each child's progress, quiz results and activity; you can download a report and set
-  learning-time controls, and talk with teachers. How: [`parent-guide.md`](parent-guide.md).
+- Your dashboard shows each child's progress, goals, quiz results and activity; you can set goals, download a
+  report and set learning-time controls. How: [`parent-guide.md`](parent-guide.md).
 - **Download their data** (under **My children**) gives you a copy of everything Lumina stores about your child,
-  including their notes, bookmarks, quiz answers and marks, badges, certificates and the controls you set.
-- Notes and bookmarks are never shown to teachers or to other students.
-
-## For teachers
-
-- How to write to parents and send class announcements: [`teacher-guide.md`](teacher-guide.md).
-
-- Teachers see whether each pupil has done the work the teacher set (not started, started, done), and nothing
-  else of their learning: not their notes, bookmarks, quiz answers, badges or certificates, unless a parent shares
-  a progress update with them in a message. (Marking written quiz answers is planned.)
+  including their notes, bookmarks, quiz answers and marks, badges, certificates, goals and the controls you set.
+- Notes and bookmarks are never shown to other students.

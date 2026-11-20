@@ -1,5 +1,8 @@
 # Moving from Drizzle to Prisma: migration notes
 
+> Historical record. Some tables named here (`teacher_profiles`, classes, assignments, messages) were removed later
+> by the `20261118120000_self_study` migration (see [`self-study-plan.md`](self-study-plan.md)).
+
 Lumina's database layer moved from Drizzle ORM to **Prisma ORM 7**. This document records what changed, why the
 result is equivalent, how it was verified, and what is left to do. For day-to-day work with the database, read
 "Database" in [`backend.md`](backend.md) instead.

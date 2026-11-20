@@ -259,20 +259,20 @@ const schema = z.object({
   name: fields.text("your name", { min: 2 }),
   email: fields.email(),
   grade: fields.choice(["1", "2", "3"], "a grade"),
-  rules: fields.accept("agree to the class rules"),
+  rules: fields.accept("agree to the terms of use"),
 });
 
-function JoinClass() {
+function RedeemCode() {
   const form = useZodForm(schema, { defaultValues: { name: "", email: "", rules: false } });
   return (
-    <Form form={form} onSubmit={(values) => api.joinClass(values)}>
+    <Form form={form} onSubmit={(values) => api.redeemCode(values)}>
       <FormErrorSummary />
       <FormField name="name" label="Your name" required>
         <Input autoComplete="name" {...form.register("name")} />
       </FormField>
       …
-      <Checkbox label="I agree to the class rules" {...form.register("rules")} />
-      <SubmitButton>Join class</SubmitButton>
+      <Checkbox label="I agree to the terms of use" {...form.register("rules")} />
+      <SubmitButton>Redeem the code</SubmitButton>
     </Form>
   );
 }
@@ -294,10 +294,47 @@ function JoinClass() {
 | Layout | Component | For |
 | --- | --- | --- |
 | Marketing | `MarketingShell` (`app/(marketing)/layout.tsx`) | Public pages: header with navigation and theme menu, graph paper, footer |
-| App | `AppShell` | Signed-in areas. Sidebar on large screens, drawer on phones, theme and account menus. Navigation per role (student, teacher, parent, admin) from `src/config/navigation.ts` |
+| App | `AppShell` | Signed-in areas. Sidebar on large screens, drawer on phones, theme and account menus. Navigation per role (student, parent, admin) from `src/config/navigation.ts` |
 | Focus | `FocusShell` | Lessons and quizzes: no navigation or footer links, plain background, reading width, progress on top, one "Save and exit", previous/next kept in reach at the bottom |
 
 Every layout starts with a "Skip to main content" link and has exactly one `<main id="main">`.
+
+Every layout has the **?** help button in its header (see [Help](#help) below); pages add nothing for it.
+
+## Help
+
+Help is there from the first page, for the whole product: the **?** button at the top right of every page (and the
+`?` key, except while typing) opens a side panel, and the public **help centre** has everything on one page per
+audience.
+
+| Where | Help shown | How it gets there |
+| --- | --- | --- |
+| Public pages (`SiteHeader`, next to **Search**) and sign-in pages (`AuthShell`) | **Getting started** (`everyone`): help for the page first, and search across **all** of Lumina's help; topics for someone else say who they are for ("Help for parents") | `<HelpButton audience="everyone" />` |
+| Signed in: app shell (students, parents, staff) | The person's own help only (a student never gets parents' topics in the panel) | `signed-in-app.tsx` |
+| Lessons, quizzes, review | Students' help | `StudentArea` → `HeaderActionsProvider`; `<HeaderActions />` in the lesson player and `FocusShell` |
+| `/help` | Search all help, one card per audience, common questions | `src/app/(marketing)/help/page.tsx` (static) |
+| `/help/getting-started`, `/students`, `/parents`, `/staff` | One audience's topics by category, searchable; `#help-{topic}` opens one | `help/[audience]/page.tsx` (static; staff help is `noindex` and not in the sitemap) |
+
+The account menu's **Help** opens the person's page in the help centre, and the footer links to it. `/learn/help`
+and `/family/help` (the first version) redirect there. The button loads the topics in the background once the page
+is idle (about 16 KB gzipped), so first page loads don't carry them.
+
+### Writing help
+
+Help lives in `src/features/help/content/`: `everyone.ts`, `student.ts`, `parent.ts`, `staff.ts`, with their names
+in `meta.ts` (small, for the button and menus).
+
+- **Name what is on the screen, exactly**, in `**bold**`: button labels, tab names, headings. Renaming a label,
+  moving a page or adding a feature means changing the help in the same pull request.
+- **Steps, not explanations**: short numbered steps that start with what to press; tips for the "what if".
+- **Getting started**: for people who have never seen Lumina; only public and sign-in pages, and links to the other
+  help (`/help/parents#help-add-child`). **Students**: short words and sentences, "your parent", nothing about
+  parents' pages. **Parents**: "your child", and how what they set looks to the child. **Staff**: what each action
+  does to the person, and what is recorded.
+- `pages` lists the paths a topic is about (`*` is one part, a trailing `**` anything below), so it shows in "Help
+  for this page"; `link` takes people to the feature (`:child` = the child the parent is looking at).
+- `keywords` are the other words people type ("login", "dark", "screen time"). Tests check that every topic is
+  complete, that every page, link and linked topic exists, and that each audience stays on its own side.
 
 ## Accessibility checklist (every screen)
 

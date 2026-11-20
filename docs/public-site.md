@@ -12,6 +12,7 @@ the legal texts true. Phase 4 in `TODO.md` (FE-PUB-01, FE-PUB-02, FE-PUB-04).
 | `/pricing` | `src/app/(marketing)/pricing/page.tsx` | Static, refreshed every 5 minutes; refreshed at once when an admin changes a price |
 | `/search?q=` | `src/app/(marketing)/search/page.tsx` | Rendered per request; `noindex, follow` |
 | `/privacy`, `/terms`, `/cookies`, `/safety`, `/contact` | `src/app/(marketing)/…/page.tsx`, texts in `src/features/legal/content/` | Static |
+| `/help`, `/help/{getting-started,students,parents,staff}` | `src/app/(marketing)/help/page.tsx`, `…/help/[audience]/page.tsx`, texts in `src/features/help/content/` | Static; staff help `noindex` and not in the sitemap |
 | `/sitemap.xml`, `/robots.txt` | `src/app/sitemap.ts`, `src/app/robots.ts` | Sitemap on request; robots static |
 | Share images | `src/app/opengraph-image.tsx`, `src/app/(marketing)/courses/[slug]/opengraph-image.tsx` | Site image static; course images on first request, cached |
 
@@ -19,7 +20,7 @@ the legal texts true. Phase 4 in `TODO.md` (FE-PUB-01, FE-PUB-02, FE-PUB-04).
 
 In order: the grade picker (still the first thing a visitor sees, with the real number of courses), subjects
 (from the database: courses per subject and the grades they cover, linking to the filtered course list), how it
-works, a working sample lesson, sections for parents and for teachers (with sign-up links that choose the role),
+works, a working sample lesson, sections for students and for parents (student sign-in; parent sign-up),
 the safety promises, questions and answers, and a closing call to action.
 
 - **Real content only.** The numbers and subjects come from published courses (`catalogOverview()` in
@@ -32,8 +33,17 @@ the safety promises, questions and answers, and a closing call to action.
   heading, feedback is announced, fractions are read as words. Replace it with a real lesson once the lesson
   player exists (FE-STU-03).
 - **Claims must be true today.** The FAQ, audience and safety sections describe only what the product does now
-  (for example "no chat", "no adverts", "class code and three pictures"). Features that don't exist yet are labelled
-  as coming ("Coming next: your classes…"). Check these texts when a feature changes.
+  (for example "no chat", "no adverts", "family code and three pictures", "separate sign-in for students and
+  parents"). Check these texts when a feature changes.
+
+## Help centre and the ? button
+
+Every public page has the **?** help button in the header, right after **Search** (`SiteHeader`), and so do the
+sign-in pages (`AuthShell`). It opens getting-started help for the page (what Lumina is, finding a course, prices,
+which sign-in page, forgotten passwords…), and its search covers all of Lumina's help, so families can see what
+students and parents can do before signing up. The footer links to the **Help centre** (`/help`). Under 380px the
+header tightens its gaps and uses 36px icon buttons so search, help, theme and sign-in still fit in one row at
+320px. Details and writing rules: [`design.md`](design.md#help).
 
 ## Grade and subject pages (FE-PUB-03)
 
@@ -62,7 +72,7 @@ in `audit_events` (`admin.course_price_updated`) and the affected cached pages a
 Under My children, a parent can download a copy of everything Lumina stores about a child
 (`GET /api/me/children/{id}/data`, a JSON file whose name never carries the child's name) and delete the child's
 account (`DELETE /api/me/children/{id}`, confirm dialog with the data download offered first). Deletion cascades
-(sessions, sign-in methods, guardianships, class memberships); the audit log records only the child's id, never
+(sessions, sign-in methods, guardianships, goals, learning); the audit log records only the child's id, never
 the name. The privacy policy points parents here. The export includes the child's learning (courses, lessons, time per day,
 Phase 5) and must grow with every new kind of data about children (BE-APP-10).
 
